@@ -15,6 +15,8 @@
             type = "filesystem";
             format = "vfat";
             mountpoint = "/boot";
+            # 设置权限掩码为 0077 (即 700 权限，仅 root 可读写)
+            mountOptions = [ "umask=0077" ]; 
           };
         };
         root = {

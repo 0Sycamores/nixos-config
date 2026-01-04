@@ -37,5 +37,5 @@
     curl
   ];
 
-  system.stateVersion = "24.11"; # 保持和 input 版本一致
+  system.stateVersion = "25.11"; # 保持和 input 版本一致
 }

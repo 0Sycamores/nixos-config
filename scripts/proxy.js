@@ -30,7 +30,8 @@ export default {
 
     if (scriptName) {
       // 命中 -> 代理下载
-      const targetUrl = `${RAW_BASE_URL}/${scriptName}`;
+      // 添加时间戳参数防止上游缓存 (Worker -> GitHub)
+      const targetUrl = `${RAW_BASE_URL}/${scriptName}?t=${Date.now()}`;
       return proxyRequest(targetUrl, request);
     }
 
@@ -92,6 +93,11 @@ async function proxyRequest(targetUrl, baseRequest) {
     const newResponseHeaders = new Headers(response.headers);
     newResponseHeaders.set('Access-Control-Allow-Origin', '*');
     newResponseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, HEAD, OPTIONS');
+
+    // 强制禁用客户端缓存 (Client -> Worker)
+    newResponseHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    newResponseHeaders.set('Pragma', 'no-cache');
+    newResponseHeaders.set('Expires', '0');
 
     return new Response(response.body, {
       status: response.status,

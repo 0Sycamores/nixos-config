@@ -46,7 +46,7 @@ nix run github:nix-community/disko -- --mode disko ./hosts/template/disko.nix
 
 # 6. 生成硬件配置
 echo -e "${GREEN}>>> 生成 hardware-configuration.nix...${NC}"
-nixos-generate-config --root /mnt --show-hardware-config > hosts/template/hardware.nix
+nixos-generate-config --root /mnt --show-hardware-config --no-filesystems > hosts/template/hardware.nix
 # 让 Flake 能看到这个新文件
 git add hosts/template/hardware.nix
 

@@ -3,7 +3,7 @@ set -e
 
 # --- 配置区 ---
 # ⚠️⚠️⚠️ 请修改下面这行！改为你的仓库地址 ⚠️⚠️⚠️
-REPO_URL="https://nixos.sycamore.icu/https://github.com/0Sycamore/nixos-config"
+REPO_URL="https://nixos.sycamore.icu/https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
 # --- 颜色 ---

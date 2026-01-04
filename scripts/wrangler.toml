@@ -1,0 +1,5 @@
+name = "nixos-config-proxy"
+main = "proxy.js"
+compatibility_date = "2026-01-01"
+
+routes = [{ pattern = "nixos.sycamore.icu", custom_domain = true }]

@@ -3,8 +3,7 @@
 set -e # 遇到错误立即停止
 
 # --- 配置区 ---
-PROXY_URL="https://nixos.sycamore.icu"
-REPO_URL="$PROXY_URL/https://github.com/0Sycamores/nixos-config"
+REPO_URL="https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
 # --- 颜色定义 ---
@@ -19,10 +18,58 @@ echo -e "\n${GREEN}[1/6] 准备环境...${NC}"
 
 # 检查网络
 if ping -c 1 baidu.com &> /dev/null; then
-    echo "网络正常。"
+    echo "互联网连接正常。"
 else
     echo -e "${RED}无法连接互联网，请先配置网络 (nmcli / wpa_supplicant)。${NC}"
     exit 1
+fi
+
+# 检查 GitHub 连接并配置代理
+check_github() {
+    echo -ne "正在检查 GitHub 连接... "
+    # 使用 curl 检查，超时设置为 5 秒
+    if curl -s --connect-timeout 5 https://github.com > /dev/null; then
+        echo -e "${GREEN}成功${NC}"
+        return 0
+    else
+        echo -e "${RED}失败${NC}"
+        return 1
+    fi
+}
+
+if ! check_github; then
+    echo -e "${RED}无法连接 GitHub，NixOS 安装需要下载 Flake inputs。${NC}"
+    echo -e "请选择解决方案："
+    echo -e "1) 配置 HTTP 代理 (推荐，例如: http://192.168.1.100:7890)"
+    echo -e "2) 使用 gh-proxy.org 镜像 (无需代理，自动修改配置文件)"
+    echo -e "3) 跳过 (可能会失败)"
+    echo -ne "请输入选项 [1-3]: "
+    read NET_CHOICE
+
+    case "$NET_CHOICE" in
+        1)
+            echo -ne "请输入代理地址: "
+            read PROXY_ADDR
+            if [ -n "$PROXY_ADDR" ]; then
+                export http_proxy="$PROXY_ADDR"
+                export https_proxy="$PROXY_ADDR"
+                echo "已设置代理: $PROXY_ADDR"
+                if ! check_github; then
+                    echo -e "${RED}错误: 配置代理后仍无法连接 GitHub。${NC}"
+                    exit 1
+                fi
+            fi
+            ;;
+        2)
+            echo ">>> 将使用 https://gh-proxy.org/ 加速下载..."
+            USE_MIRROR=true
+            # 修改 Clone URL
+            REPO_URL="https://gh-proxy.org/https://github.com/0Sycamores/nixos-config"
+            ;;
+        *)
+            echo -e "${RED}警告: 未采取措施，后续步骤可能会失败。${NC}"
+            ;;
+    esac
 fi
 
 echo ">>> 正在启用 Flakes..."
@@ -73,6 +120,14 @@ echo -e "\n${GREEN}[3/6] 注入配置信息...${NC}"
 sed -i "s|__DISK_DEVICE__|$TARGET_DISK|g" hosts/minimal/disko.nix
 sed -i "s|__HOSTNAME__|$NEW_HOSTNAME|g" hosts/minimal/default.nix
 sed -i "s|__USERNAME__|$USERNAME|g" hosts/minimal/default.nix
+
+if [ "$USE_MIRROR" = "true" ]; then
+    echo ">>> 正在应用 GitHub 镜像配置到 flake.nix..."
+    # 替换 nixpkgs 源
+    sed -i 's|url = "github:nixos/nixpkgs/nixos-25.11"|url = "git+https://gh-proxy.org/https://github.com/nixos/nixpkgs?ref=nixos-25.11"|g' flake.nix
+    # 替换 disko 源
+    sed -i 's|url = "github:nix-community/disko"|url = "git+https://gh-proxy.org/https://github.com/nix-community/disko"|g' flake.nix
+fi
 
 # --- 4. 执行分区与挂载 ---
 echo -e "\n${GREEN}[4/6] 执行 Disko 分区...${NC}"

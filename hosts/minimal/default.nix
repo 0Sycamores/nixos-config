@@ -26,8 +26,13 @@
     settings.PermitRootLogin = "yes";
   };
 
-  # 初始用户 (密码是 1)
-  users.users.root.initialPassword = "1";
+  # 普通用户
+  users.users.__USERNAME__ = {
+    isNormalUser = true;
+    description = "__USERNAME__";
+    extraGroups = [ "networkmanager" "wheel" ];
+    initialPassword = "password";
+  };
 
   # 常用软件
   environment.systemPackages = with pkgs; [

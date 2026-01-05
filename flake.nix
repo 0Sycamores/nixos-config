@@ -1,5 +1,5 @@
 {
-  description = "Automated NixOS Install Flake";
+  description = "Sycamore's NixOS Install Flake";
 
   inputs = {
     # 锁定版本为 25.11
@@ -12,12 +12,12 @@
 
   outputs = { self, nixpkgs, disko, ... }: {
     nixosConfigurations = {
-      # 这里的名字 "new-machine" 很重要，install.sh 脚本里会用到
-      "new-machine" = nixpkgs.lib.nixosSystem {
+      # 最小化安装
+      "minimal" = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           disko.nixosModules.disko
-          ./hosts/template/default.nix
+          ./hosts/minimal/default.nix
         ];
       };
     };

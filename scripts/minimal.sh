@@ -3,8 +3,7 @@
 set -e # 遇到错误立即停止
 
 # --- 配置区 ---
-PROXY_URL="https://nixos.sycamore.icu"
-REPO_URL="https://github.com/0Sycamores/nixos-config"
+REPO_URL="https://nixos.sycamore.icu/https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
 # --- 颜色定义 ---

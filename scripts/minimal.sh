@@ -3,6 +3,7 @@
 set -e # 遇到错误立即停止
 
 # --- 配置区 ---
+PROXY_URL="https://nixos.sycamore.icu"
 REPO_URL="https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
@@ -61,10 +62,8 @@ if ! check_github; then
             fi
             ;;
         2)
-            echo ">>> 将使用 https://gh-proxy.org/ 加速下载..."
+            echo ">>> 将使用 https://gh-proxy.org/ 加速下载 (仅用于 flake.nix inputs)..."
             USE_MIRROR=true
-            # 修改 Clone URL
-            REPO_URL="https://gh-proxy.org/https://github.com/0Sycamores/nixos-config"
             ;;
         *)
             echo -e "${RED}警告: 未采取措施，后续步骤可能会失败。${NC}"

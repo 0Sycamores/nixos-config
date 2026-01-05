@@ -3,7 +3,8 @@
 set -e # 遇到错误立即停止
 
 # --- 配置区 ---
-REPO_URL="https://nixos.sycamore.icu/https://github.com/0Sycamores/nixos-config"
+PROXY_URL="https://nixos.sycamore.icu"
+REPO_URL="$PROXY_URL/https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
 # --- 颜色定义 ---
@@ -27,6 +28,8 @@ fi
 echo ">>> 正在启用 Flakes..."
 mkdir -p ~/.config/nix
 echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+# 配置 substituters 代理，加速二进制缓存下载 (使用 USTC 镜像)
+echo "substituters = https://mirrors.ustc.edu.cn/nix-channels/store https://cache.nixos.org/" >> ~/.config/nix/nix.conf
 
 echo ">>> 正在从 GitHub 克隆配置..."
 rm -rf $TARGET_DIR
@@ -57,13 +60,13 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 # 询问主机名与用户名
-echo -ne "请输入主机名 (Hostname) [默认: nixos]: "
+echo -ne "请输入主机名 (Hostname) [默认: minimal]: "
 read NEW_HOSTNAME
 NEW_HOSTNAME=${NEW_HOSTNAME:-nixos}
 
-echo -ne "请输入用户名 (Username) [默认: ryan]: "
+echo -ne "请输入用户名 (Username) [默认: minimal]: "
 read USERNAME
-USERNAME=${USERNAME:-ryan}
+USERNAME=${USERNAME:-minimal}
 
 # --- 3. 替换占位符 ---
 echo -e "\n${GREEN}[3/6] 注入配置信息...${NC}"
@@ -77,11 +80,12 @@ nix run github:nix-community/disko -- --mode disko ./hosts/minimal/disko.nix
 
 # --- 5. 生成硬件配置 ---
 echo -e "\n${GREEN}[5/6] 生成硬件配置...${NC}"
-nixos-generate-config --root /mnt --show-hardware-config --no-filesystems > hosts/minimal/hardware.nix
+nixos-generate-config --root /mnt --no-filesystems > hosts/minimal/hardware.nix
 
 # --- 6. 执行安装 ---
 echo -e "\n${GREEN}[6/6] 开始安装 NixOS...${NC}"
-nixos-install --root /mnt --flake .#minimal
+# 使用 --option substituters 指定代理，确保安装过程中也能走代理 (使用 USTC 镜像)
+nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake .#minimal
 
 echo -e "\n${GREEN}=== 安装完成！ ===${NC}"
 echo "请设置 root 密码："

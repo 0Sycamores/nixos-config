@@ -2,4 +2,4 @@
 
 ## 使用方式
 ```bash
-bash <(curl -fsSL nixos.sycamore.icu)
+bash <(curl -fsSL nixos.sycamore.icu/minimal)

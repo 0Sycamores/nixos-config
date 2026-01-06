@@ -1,146 +1,146 @@
 #!/usr/bin/env bash
 
-set -e # 遇到错误立即停止
+set -e # Stop on error
 
-# --- 配置区 ---
+# --- Configuration ---
 REPO_URL="https://github.com/0Sycamores/nixos-config"
 TARGET_DIR="/tmp/nixos-install"
 
-# --- 颜色定义 ---
+# --- Colors ---
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}=== NixOS 多主机安装向导 ===${NC}"
+echo -e "${GREEN}=== NixOS Multi-Host Installer ===${NC}"
 
-# --- 1. 准备环境 ---
-echo -e "\n${GREEN}[1/7] 准备环境...${NC}"
+# --- 1. Prepare Environment ---
+echo -e "\n${GREEN}[1/7] Preparing environment...${NC}"
 
-# 检查是否在 NixOS 安装环境中
+# Check if in NixOS installation environment
 if [ ! -e /etc/NIXOS ]; then
-    echo -e "${RED}警告: 似乎不在 NixOS ISO 环境中。此脚本主要用于裸机安装。${NC}"
-    echo -ne "确认继续吗? (yes/no): "
+    echo -e "${RED}Warning: It seems you are not in the NixOS ISO environment. This script is intended for bare metal installation.${NC}"
+    echo -ne "Confirm to continue? (yes/no): "
     read CONFIRM
     if [ "$CONFIRM" != "yes" ]; then exit 1; fi
 fi
 
-# 检查网络
+# Check network
 if ping -c 1 baidu.com &> /dev/null; then
-    echo "互联网连接正常。"
+    echo "Internet connection is normal."
 else
-    echo -e "${RED}无法连接互联网，请先配置网络 (nmcli / wpa_supplicant)。${NC}"
+    echo -e "${RED}Unable to connect to the internet. Please configure the network first (nmcli / wpa_supplicant).${NC}"
     exit 1
 fi
 
-# 询问是否配置 HTTP 代理
-echo -e "\n是否需要配置 HTTP 代理以加速 GitHub 访问? (建议国内用户配置)"
-echo -ne "请输入代理地址 (例如 http://192.168.1.100:7890，留空则不配置): "
+# Ask to configure HTTP proxy
+echo -e "\nDo you need to configure an HTTP proxy to speed up GitHub access?"
+echo -ne "Please enter proxy address (e.g. http://192.168.1.100:7890, leave empty to skip): "
 read PROXY_ADDR
 
 if [ -n "$PROXY_ADDR" ]; then
     export http_proxy="$PROXY_ADDR"
     export https_proxy="$PROXY_ADDR"
-    echo "已设置代理: $PROXY_ADDR"
+    echo "Proxy set: $PROXY_ADDR"
 fi
 
-# 开启 Flakes
+# Enable Flakes
 mkdir -p ~/.config/nix
 cat > ~/.config/nix/nix.conf << EOF
 experimental-features = nix-command flakes
 substituters = https://mirrors.ustc.edu.cn/nix-channels/store https://cache.nixos.org/
 EOF
 
-# --- 2. 获取配置 ---
-echo -e "\n${GREEN}[2/7] 获取配置...${NC}"
+# --- 2. Fetch Configuration ---
+echo -e "\n${GREEN}[2/7] Fetching configuration...${NC}"
 
-echo "准备从 GitHub 克隆配置..."
+echo "Preparing to clone configuration from GitHub..."
 if [ -d "$TARGET_DIR" ]; then
-    echo "清理旧目录 $TARGET_DIR ..."
+    echo "Cleaning up old directory $TARGET_DIR ..."
     rm -rf $TARGET_DIR
 fi
 
-# 使用 git clone 拉取代码
+# Use git clone to pull code
 nix shell nixpkgs#git --command git clone $REPO_URL $TARGET_DIR
 cd $TARGET_DIR
 
-# --- 3. 选择主机 ---
-echo -e "\n${GREEN}[3/7] 选择安装目标主机${NC}"
-echo "可用主机配置 (hosts/):"
+# --- 3. Select Host ---
+echo -e "\n${GREEN}[3/7] Select target host${NC}"
+echo "Available host configurations (hosts/):"
 
-# 获取 hosts 目录下的子目录列表
+# Get subdirectories in hosts directory
 HOSTS=($(ls hosts))
 
-# 显示菜单
+# Show menu
 i=1
 for host in "${HOSTS[@]}"; do
     echo "$i) $host"
     let i++
 done
 
-echo -ne "请输入序号选择主机: "
+echo -ne "Please enter the number to select a host: "
 read HOST_INDEX
 
-# 验证输入
+# Validate input
 if [[ ! "$HOST_INDEX" =~ ^[0-9]+$ ]] || [ "$HOST_INDEX" -lt 1 ] || [ "$HOST_INDEX" -gt "${#HOSTS[@]}" ]; then
-    echo -e "${RED}错误: 无效的选择${NC}"
+    echo -e "${RED}Error: Invalid selection${NC}"
     exit 1
 fi
 
-# 获取选中的主机名
+# Get selected hostname
 SELECTED_HOST=${HOSTS[$((HOST_INDEX-1))]}
-echo -e "已选择主机: ${GREEN}$SELECTED_HOST${NC}"
+echo -e "Selected host: ${GREEN}$SELECTED_HOST${NC}"
 
-# 检查 disko 配置是否存在
+# Check if disko configuration exists
 if [ ! -f "hosts/$SELECTED_HOST/disko.nix" ]; then
-    echo -e "${RED}错误: hosts/$SELECTED_HOST/disko.nix 不存在。${NC}"
-    echo "该主机可能不支持自动分区安装，或者配置尚未完成。"
+    echo -e "${RED}Error: hosts/$SELECTED_HOST/disko.nix does not exist.${NC}"
+    echo "This host might not support automatic partitioning installation, or configuration is incomplete."
     exit 1
 fi
 
-# --- 4. 选择硬盘 ---
-echo -e "\n${GREEN}[4/7] 选择目标硬盘${NC}"
+# --- 4. Select Disk ---
+echo -e "\n${GREEN}[4/7] Select target disk${NC}"
 lsblk -d -n -o NAME,SIZE,MODEL,TYPE | grep "disk"
-echo -ne "请输入目标硬盘设备名 (例如 sda 或 nvme0n1): "
+echo -ne "Please enter target disk name (e.g., sda or nvme0n1): "
 read DISK_NAME
 TARGET_DISK="/dev/$DISK_NAME"
 
 if [ ! -b "$TARGET_DISK" ]; then
-    echo -e "${RED}错误: 找不到设备 $TARGET_DISK${NC}"
+    echo -e "${RED}Error: Device $TARGET_DISK not found${NC}"
     exit 1
 fi
 
-echo -e "${RED}警告: $TARGET_DISK 上的所有数据将被清空！${NC}"
-echo -ne "确认继续吗? (yes/no): "
+echo -e "${RED}Warning: All data on $TARGET_DISK will be cleared!${NC}"
+echo -ne "Confirm to continue? (yes/no): "
 read CONFIRM_DISK
 if [ "$CONFIRM_DISK" != "yes" ]; then
-    echo "已取消。"
+    echo "Cancelled."
     exit 1
 fi
 
-# --- 5. 注入配置 ---
-echo -e "\n${GREEN}[5/7] 注入硬件配置...${NC}"
+# --- 5. Inject Configuration ---
+echo -e "\n${GREEN}[5/7] Injecting hardware configuration...${NC}"
 
-# 修改 Disko 配置中的磁盘设备
-# 匹配 device = "..."; 并替换
+# Modify disk device in Disko configuration
+# Match device = "..."; and replace
 sed -i "s|device = \".*\";|device = \"$TARGET_DISK\";|" hosts/$SELECTED_HOST/disko.nix
-echo "已将安装目标设置为 $TARGET_DISK"
+echo "Installation target set to $TARGET_DISK"
 
-# --- 6. 分区与格式化 ---
-echo -e "\n${GREEN}[6/7] 执行 Disko 分区...${NC}"
+# --- 6. Partitioning and Formatting ---
+echo -e "\n${GREEN}[6/7] Executing Disko partitioning...${NC}"
 nix run .#disko -- --mode disko ./hosts/$SELECTED_HOST/disko.nix
 
-# --- 7. 安装 ---
-echo -e "\n${GREEN}[7/7] 生成硬件配置并安装...${NC}"
+# --- 7. Install ---
+echo -e "\n${GREEN}[7/7] Generating hardware config and installing...${NC}"
 
-# 生成 hardware-configuration.nix
+# Generate hardware-configuration.nix
 nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > hosts/$SELECTED_HOST/hardware.nix
 git add hosts/$SELECTED_HOST/hardware.nix
 
-echo "开始安装 NixOS ($SELECTED_HOST)..."
+echo "Starting NixOS installation ($SELECTED_HOST)..."
 nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake .#$SELECTED_HOST
 
-echo -e "\n${GREEN}=== 安装完成！ ===${NC}"
-echo "请设置 root 密码："
+echo -e "\n${GREEN}=== Installation Complete! ===${NC}"
+echo "Please set root password:"
 nixos-enter --root /mnt -c 'passwd root'
 
-echo -e "\n${GREEN}您可以输入 'reboot' 重启进入新系统了。${NC}"
+echo -e "\n${GREEN}You can type 'reboot' to restart into the new system.${NC}"

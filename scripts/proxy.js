@@ -25,7 +25,7 @@ export default {
 
     // 定义仅有的几个“合法”脚本路径
     const ROUTES = {
-      '/minimal': 'scripts/minimal.sh',
+      '/install': 'scripts/install.sh',
     };
 
     // 允许代理的前缀白名单

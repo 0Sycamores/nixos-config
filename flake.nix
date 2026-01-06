@@ -1,23 +1,85 @@
 {
-  description = "Sycamore's NixOS Install Flake";
+  description = "Sycamore's Multi-System Nix Config";
 
   inputs = {
-    # 锁定版本为 25.11
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    # 核心包仓库
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    # Home Manager (用户环境管理)
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+    # macOS 系统管理 (nix-darwin)
+    darwin.url = "github:lnl7/nix-darwin";
+    darwin.inputs.nixpkgs.follows = "nixpkgs";
+
+    # WSL 支持 (NixOS-WSL)
+    nixos-wsl.url = "github:nix-community/NixOS-WSL";
+    nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
     
     # 磁盘分区工具
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, disko, ... }: {
+  outputs = { self, nixpkgs, home-manager, darwin, nixos-wsl, disko, ... }@inputs: {
+    
+    # NixOS Configurations
     nixosConfigurations = {
-      # 最小化安装
-      "minimal" = nixpkgs.lib.nixosSystem {
+      
+      # [Test VM] - Iroha
+      iroha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           disko.nixosModules.disko
-          ./hosts/minimal/default.nix
+          ./hosts/iroha/default.nix
+          
+          # Home Manager 模块
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.sycamore = import ./home/sycamore/iroha.nix;
+          }
+        ];
+      };
+
+      # [Desktop] - Yukino
+      yukino = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          # disko.nixosModules.disko # 稍后启用
+          ./hosts/yukino/default.nix
+        ];
+      };
+
+      # [Mini PC] - Komachi
+      komachi = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          # disko.nixosModules.disko # 稍后启用
+          ./hosts/komachi/default.nix
+        ];
+      };
+
+      # [WSL] - Yui
+      yui = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          nixos-wsl.nixosModules.wsl
+          ./hosts/yui/default.nix
+        ];
+      };
+    };
+
+    # Darwin Configurations (macOS)
+    darwinConfigurations = {
+      
+      # [MacBook Pro 2018] - Shizuka
+      shizuka = darwin.lib.darwinSystem {
+        system = "x86_64-darwin"; # Intel Mac
+        modules = [
+          ./hosts/shizuka/default.nix
         ];
       };
     };

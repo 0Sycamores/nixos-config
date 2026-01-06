@@ -1,6 +1,6 @@
 {
   disko.devices.disk.main = {
-    device = "__DISK_DEVICE__";
+    device = "/dev/sda"; # 默认 VM 磁盘
     type = "disk";
     content = {
       type = "gpt";
@@ -9,7 +9,7 @@
           priority = 1;
           name = "ESP";
           start = "1M";
-          end = "1G"; # EFI 分区大小为 1G
+          end = "1G";
           type = "EF00";
           content = {
             type = "filesystem";
@@ -24,35 +24,26 @@
             type = "btrfs";
             extraArgs = [ "-f" ];
             subvolumes = {
-              # 挂载根目录
               "/@" = { 
                 mountpoint = "/";
                 mountOptions = [ "compress=zstd" "noatime" ];
               };
-              
-              # 挂载 /home
               "/@home" = { 
                 mountpoint = "/home"; 
                 mountOptions = [ "compress=zstd" "noatime" ];
               };
-
-              # NixOS 核心目录
               "/@nix" = { 
                 mountpoint = "/nix"; 
                 mountOptions = [ "compress=zstd" "noatime" ]; 
               };
-
-              # 快照目录 (配合 snapper)
               "/@snapshots" = { 
                 mountpoint = "/home/.snapshots"; 
                 mountOptions = [ "compress=zstd" "noatime" ]; 
               };
-              
-              # # 游戏目录：禁用 CoW (nodatacow)
-              # "/@games" = { 
-              #   mountpoint = "/games";
-              #   mountOptions = [ "nodatacow" "noatime" ]; 
-              # };
+              "/@games" = { 
+                mountpoint = "/games";
+                mountOptions = [ "nodatacow" "noatime" ]; 
+              };
             };
           };
         };

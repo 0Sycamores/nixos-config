@@ -72,6 +72,9 @@
       };
     };
 
+    # Expose Disko package for installation script
+    packages.x86_64-linux.disko = disko.packages.x86_64-linux.disko;
+
     # Darwin Configurations (macOS)
     darwinConfigurations = {
       

@@ -52,9 +52,10 @@ fi
 
 echo ">>> 正在启用 Flakes..."
 mkdir -p ~/.config/nix
-echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
-# 配置 substituters 代理，加速二进制缓存下载 (使用 USTC 镜像)
-echo "substituters = https://mirrors.ustc.edu.cn/nix-channels/store https://cache.nixos.org/" >> ~/.config/nix/nix.conf
+cat > ~/.config/nix/nix.conf << EOF
+experimental-features = nix-command flakes
+substituters = https://mirrors.ustc.edu.cn/nix-channels/store https://cache.nixos.org/
+EOF
 
 echo ">>> 正在从 GitHub 克隆配置..."
 rm -rf $TARGET_DIR
@@ -87,11 +88,16 @@ fi
 # 询问主机名与用户名
 echo -ne "请输入主机名 (Hostname) [默认: minimal]: "
 read NEW_HOSTNAME
-NEW_HOSTNAME=${NEW_HOSTNAME:-nixos}
+NEW_HOSTNAME=${NEW_HOSTNAME:-minimal}
 
 echo -ne "请输入用户名 (Username) [默认: minimal]: "
 read USERNAME
 USERNAME=${USERNAME:-minimal}
+
+if [[ ! "$USERNAME" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+    echo -e "${RED}错误: 用户名只能包含小写字母、数字和下划线，且不能以数字开头${NC}"
+    exit 1
+fi
 
 # --- 3. 替换占位符 ---
 echo -e "\n${GREEN}[3/6] 注入配置信息...${NC}"
@@ -99,14 +105,15 @@ sed -i "s|__DISK_DEVICE__|$TARGET_DISK|g" hosts/minimal/disko.nix
 sed -i "s|__HOSTNAME__|$NEW_HOSTNAME|g" hosts/minimal/default.nix
 sed -i "s|__USERNAME__|$USERNAME|g" hosts/minimal/default.nix
 
-
 # --- 4. 执行分区与挂载 ---
 echo -e "\n${GREEN}[4/6] 执行 Disko 分区...${NC}"
-nix run github:nix-community/disko -- --mode disko ./hosts/minimal/disko.nix
+nix run .#disko -- --mode disko ./hosts/minimal/disko.nix
 
 # --- 5. 生成硬件配置 ---
 echo -e "\n${GREEN}[5/6] 生成硬件配置...${NC}"
-nixos-generate-config --root /mnt --no-filesystems > hosts/minimal/hardware.nix
+nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > hosts/minimal/hardware.nix
+# 让 Flake 能看到这个新文件
+git add hosts/minimal/hardware.nix
 
 # --- 6. 执行安装 ---
 echo -e "\n${GREEN}[6/6] 开始安装 NixOS...${NC}"

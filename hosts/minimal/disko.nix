@@ -48,11 +48,11 @@
                 mountOptions = [ "compress=zstd" "noatime" ]; 
               };
               
-              # 游戏目录：禁用 CoW (nodatacow)
-              "/@games" = { 
-                mountpoint = "/games";
-                mountOptions = [ "nodatacow" "noatime" ]; 
-              };
+              # # 游戏目录：禁用 CoW (nodatacow)
+              # "/@games" = { 
+              #   mountpoint = "/games";
+              #   mountOptions = [ "nodatacow" "noatime" ]; 
+              # };
             };
           };
         };

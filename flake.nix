@@ -53,38 +53,9 @@
         ];
       };
 
-      # [Mini PC] - Komachi
-      komachi = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          # disko.nixosModules.disko # 稍后启用
-          ./hosts/komachi/default.nix
-        ];
-      };
-
-      # [WSL] - Yui
-      yui = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          nixos-wsl.nixosModules.wsl
-          ./hosts/yui/default.nix
-        ];
-      };
     };
 
     # Expose Disko package for installation script
     packages.x86_64-linux.disko = disko.packages.x86_64-linux.disko;
-
-    # Darwin Configurations (macOS)
-    darwinConfigurations = {
-      
-      # [MacBook Pro 2018] - Shizuka
-      shizuka = darwin.lib.darwinSystem {
-        system = "x86_64-darwin"; # Intel Mac
-        modules = [
-          ./hosts/shizuka/default.nix
-        ];
-      };
-    };
   };
 }

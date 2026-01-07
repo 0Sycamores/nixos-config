@@ -39,12 +39,16 @@
     settings.PermitRootLogin = "yes";
   };
 
+  # 启用 Fish Shell
+  programs.fish.enable = true;
+
   # 普通用户
   users.users.sycamore = {
     isNormalUser = true;
     description = "sycamore";
     extraGroups = [ "networkmanager" "wheel" ];
     initialPassword = "password";
+    shell = pkgs.fish;
   };
 
   # 常用软件 (用户级软件已移至 Home Manager)

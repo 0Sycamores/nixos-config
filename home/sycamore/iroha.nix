@@ -7,8 +7,6 @@
   # 启用 Home Manager 管理 Shell 环境
   programs.bash.enable = true;
 
-  users.users.sycamore.shell = pkgs.fish;
-  
   # Fish Shell 配置
   programs.fish = {
     enable = true;

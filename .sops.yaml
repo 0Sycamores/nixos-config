@@ -1,0 +1,12 @@
+# .sops.yaml
+keys:
+  - &temp     age1nnfyrufg4wqct5ejtzhqngh80sg4skdu9srt9zfd8d5a7s95s5as5tecug 
+  - &iroha    age1x8ncu43ylh82l7qaw889exxzq794pte4hlk0s4a4trenv2td7yhqzratqw
+
+creation_rules:
+  # 只要是 secrets 目录下的文件，都同时加上这两把锁
+  - path_regex: secrets[\\/].*
+    key_groups:
+      - age:
+          - *temp
+          - *iroha

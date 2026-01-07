@@ -153,7 +153,7 @@ nix run .#disko -- --mode disko ./hosts/$SELECTED_HOST/disko.nix
 # --- 7. 安装 ---
 echo -e "\n${GREEN}[7/8] Generating hardware config and installing...${NC}"
 
-# 生成 hardware-configuration.nix
+# 生成 hardware.nix
 nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > hosts/$SELECTED_HOST/hardware.nix
 git add hosts/$SELECTED_HOST/hardware.nix
 
@@ -162,22 +162,45 @@ nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/st
 
 echo -e "\n${GREEN}=== Installation Complete! ===${NC}"
 
-# --- 8. 设置用户密码 ---
-echo -e "\n${GREEN}[8/8] Set user password${NC}"
-TARGET_USER=$(nixos-enter --root /mnt -c 'getent passwd' | awk -F: '$3 == 1000 {print $1}')
+################### 需要重构
+# # --- 8. 恢复 SSH 密钥 (通过 rbw) ---
+# echo -e "\n${GREEN}[8/8] Restoring SSH Host Keys from Bitwarden...${NC}"
 
-if [ -n "$TARGET_USER" ]; then
-    for ((i=1; i<=3; i++)); do
-        echo -e "\nPlease set password for user ${GREEN}$TARGET_USER${NC} (Attempt $i/3):"
-        if nixos-enter --root /mnt -c "passwd $TARGET_USER"; then
-            break
-        else
-            echo -e "${RED}Failed to set password.${NC}"
-            if [ $i -eq 3 ]; then
-                 echo -e "${RED}Max retries reached. Skipped setting password for $TARGET_USER.${NC}"
-            fi
-        fi
-    done
-fi
+# # 确保目标目录存在
+# mkdir -p /mnt/etc/ssh
+
+# # 检查是否已登录 rbw，如果没有则提示登录
+# if ! nix run nixpkgs#rbw -- unlocked 2>/dev/null; then
+#     echo "Please login to Bitwarden (rbw) to fetch the SSH key."
+
+#     echo -ne "Enter Bitwarden server URL (Leave empty for official server): "
+#     read BW_URL
+#     if [ -z "$BW_URL" ]; then
+#         BW_URL="https://api.bitwarden.com"
+#     fi
+
+#     echo -ne "Enter your Bitwarden email: "
+#     read BW_EMAIL
+    
+#     # 进入一个带有 rbw 的 shell 让用户登录
+#     echo "Configuring rbw..."
+#     nix shell nixpkgs#rbw -c bash -c "rbw config set base_url $BW_URL && rbw config set email $BW_EMAIL && echo 'Please enter your master password to login:' && rbw login"
+# fi
+
+# # 提示用户输入 Bitwarden 中的密钥项名称
+# echo -ne "Enter the Bitwarden item name for ${SELECTED_HOST}'s SSH key: "
+# read BW_ITEM_NAME
+
+# # 拉取密钥并写入目标位置
+# echo "Fetching key '$BW_ITEM_NAME'..."
+# if nix run nixpkgs#rbw -- get "$BW_ITEM_NAME" > /mnt/etc/ssh/ssh_host_ed25519_key; then
+#     # 设置正确权限
+#     chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
+#     echo -e "${GREEN}SSH key restored and permissions set.${NC}"
+# else
+#     echo -e "${RED}Failed to fetch key! Please check the item name or your login status.${NC}"
+#     echo -e "${RED}You MUST manually copy the correct ssh_host_ed25519_key to /mnt/etc/ssh/ before rebooting!${NC}"
+#     echo -e "${RED}Otherwise you will be locked out.${NC}"
+# fi
 
 echo -e "\n${GREEN}You can type 'reboot' to restart into the new system.${NC}"

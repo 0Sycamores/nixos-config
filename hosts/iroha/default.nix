@@ -9,8 +9,18 @@
   # 必须开启 Flakes
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   
-  # 使用国内镜像源 (USTC)
-  nix.settings.substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
+  # 使用国内镜像源 + 官方源作为备用
+  nix.settings = {
+    substituters = [
+      "https://mirrors.ustc.edu.cn/nix-channels/store"   # USTC 镜像
+      "https://mirror.sjtu.edu.cn/nix-channels/store"    # 上交镜像
+      "https://cache.nixos.org/"                         # 官方源（备用）
+    ];
+    trusted-public-keys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+    ];
+  };
+
 
   # 引导加载器
   boot.loader.systemd-boot.enable = true;

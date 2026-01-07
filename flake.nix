@@ -39,7 +39,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.sycamore = import ./home/sycamore/iroha.nix;
+            home-manager.users.sycamore = import ./home/iroha.nix;
           }
         ];
       };

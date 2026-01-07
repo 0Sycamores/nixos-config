@@ -36,8 +36,10 @@
   # 开启 SSH
   services.openssh = {
     enable = true;
-    settings.PermitRootLogin = "yes";
+    settings.PermitRootLogin = "no";
   };
+
+  users.users.root.hashedPassword = "!";
 
   # 启用 Fish Shell
   programs.fish.enable = true;

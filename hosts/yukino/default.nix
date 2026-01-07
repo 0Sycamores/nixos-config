@@ -9,5 +9,7 @@
   networking.hostName = "yukino";
   time.timeZone = "Asia/Shanghai";
   
+  users.users.root.hashedPassword = "!";
+
   system.stateVersion = "25.11";
 }

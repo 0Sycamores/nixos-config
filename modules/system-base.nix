@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, vars, ... }:
 
 {
   # 开启 Nix Flakes
@@ -16,13 +16,27 @@
     ];
   };
 
-  # 引导加载器
-  boot.loader.systemd-boot.enable = true;
+  # 引导加载器 (GRUB)
+  boot.loader.systemd-boot.enable = false;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader.grub = {
+    enable = true;
+    efiSupport = true;
+    device = "nodev";
+    useOSProber = true;
+    default = "saved"; # 记忆上次启动项
+    theme = pkgs.distro-grub-themes;
+  };
+
+  # 内核参数优化
+  boot.kernelParams = [
+    "nowatchdog"
+    "zswap.enabled=0"
+  ];
 
   networking.networkmanager.enable = true;
 
-  time.timeZone = "Asia/Shanghai";
+  time.timeZone = vars.timeZone;
 
   # 开启 SSH 服务，禁止 root 登录
   services.openssh = {
@@ -38,10 +52,10 @@
     hashedPasswordFile = config.sops.secrets.root_password.path;
   };
 
-  # Sycamore 用户
-  users.users.sycamore = {
+  # Wheel 用户
+  users.users.${vars.username} = {
     isNormalUser = true;
-    description = "sycamore";
+    description = "${vars.username}";
     extraGroups = [ "networkmanager" "wheel" ];
     hashedPasswordFile = config.sops.secrets.user_password.path;
     shell = pkgs.fish;
@@ -52,7 +66,8 @@
     wget
     curl
     git
+    distro-grub-themes
   ];
 
-  system.stateVersion = "25.11";
+  system.stateVersion = vars.stateVersion;
 }

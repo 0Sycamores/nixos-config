@@ -16,7 +16,7 @@
         neededForUsers = true;
       };
       
-      # Sycamore 用户密码
+      # Weel 用户密码
       user_password = {
         neededForUsers = true;
       };

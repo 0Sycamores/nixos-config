@@ -26,39 +26,29 @@
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, home-manager, darwin, nixos-wsl, disko, sops-nix, ... }@inputs: {
+  outputs = { self, nixpkgs, home-manager, darwin, nixos-wsl, disko, sops-nix, ... }@inputs:
+    let
+      vars = import ./modules/vars.nix;
+    in
+    {
     
     nixosConfigurations = {
 
       # [主力机] Yukino
       yukino = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs vars; };
         modules = [
           ./hosts/yukino/default.nix
-          # disko.nixosModules.disko # 稍后启用
-          sops-nix.nixosModules.sops
         ];
       };
       
       # [虚拟机] Iroha
       iroha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs vars; };
         modules = [
-          # 系统级配置
           ./hosts/iroha/default.nix
-          # 磁盘配置
-          disko.nixosModules.disko
-          # 加密配置
-          sops-nix.nixosModules.sops
-          # 用户级配置
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.users.sycamore = import ./home/iroha.nix;
-          }
         ];
       };
     };

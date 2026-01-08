@@ -25,13 +25,25 @@
     device = "nodev";
     useOSProber = true;
     default = "saved"; # 记忆上次启动项
-    theme = pkgs.distro-grub-themes;
+    theme = pkgs.fetchFromGitHub {
+        owner = "adnksharp";
+        repo = "CyberGRUB-2077";
+        rev = "6a5736ef44e4ede9bb403d78eafe7271dd2928db";
+        sha256 = "sha256-1f61nkh6a2vwdaglzsbhj0pm5nrfq7qb1vx8g8wg19s1sbdaq8j7";
+    };
   };
 
   # 内核参数优化
   boot.kernelParams = [
-    "nowatchdog"
-    "zswap.enabled=0"
+    "nowatchdog"      # 禁用看门狗加速启动和关机
+    "zswap.enabled=0" # 禁用zswap 防止和zram冲突
+    "loglevel=5"      # 启动日志开到5级
+  ];
+
+  # 禁用不需要的内核模块
+  boot.blacklistedKernelModules = [
+    "iTCO_wdt"   # intel 的看门狗
+    "sp5100_tco" # AMD 的看门狗
   ];
 
   networking.networkmanager.enable = true;

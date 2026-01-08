@@ -11,6 +11,27 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # 清除颜色
 
+# --- 错误处理与清理 ---
+cleanup() {
+    EXIT_CODE=$?
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        echo -e "\n${RED}❌ Script exited with error code $EXIT_CODE.${NC}"
+        echo -e "${RED}Cleaning up...${NC}"
+
+        # 检查 /mnt 是否有挂载
+        if grep -qs "/mnt" /proc/mounts; then
+            echo "Unmounting /mnt..."
+            # 尝试关闭 swap (防止锁住磁盘)
+            swapoff -a || true
+            # 使用 -R 递归卸载 /mnt 下的所有挂载点
+            umount -R /mnt || echo -e "${RED}Warning: Failed to unmount /mnt.${NC}"
+        fi
+        
+        echo -e "${RED}Cleanup complete.${NC}"
+    fi
+}
+trap cleanup EXIT INT TERM
+
 echo -e "${GREEN}=== NixOS Multi-Host Installer ===${NC}"
 
 # --- 1. 准备环境 ---
@@ -162,45 +183,47 @@ nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/st
 
 echo -e "\n${GREEN}=== Installation Complete! ===${NC}"
 
-################### 需要重构
-# # --- 8. 恢复 SSH 密钥 (通过 rbw) ---
-# echo -e "\n${GREEN}[8/8] Restoring SSH Host Keys from Bitwarden...${NC}"
 
-# # 确保目标目录存在
-# mkdir -p /mnt/etc/ssh
+# --- 8. 恢复 SSH 密钥 (通过 rbw) ---
+echo -e "\n${GREEN}[8/8] Restoring SSH Host Keys from Bitwarden...${NC}"
 
-# # 检查是否已登录 rbw，如果没有则提示登录
-# if ! nix run nixpkgs#rbw -- unlocked 2>/dev/null; then
-#     echo "Please login to Bitwarden (rbw) to fetch the SSH key."
+# 确保目标目录存在
+mkdir -p /mnt/etc/ssh
 
-#     echo -ne "Enter Bitwarden server URL (Leave empty for official server): "
-#     read BW_URL
-#     if [ -z "$BW_URL" ]; then
-#         BW_URL="https://api.bitwarden.com"
-#     fi
+# 检查是否已登录 rbw，如果没有则提示登录
+if ! nix run nixpkgs#rbw -- unlocked 2>/dev/null; then
+    echo "Please login to Bitwarden (rbw) to fetch the SSH key."
 
-#     echo -ne "Enter your Bitwarden email: "
-#     read BW_EMAIL
+    echo -ne "Enter Bitwarden server URL (Leave empty for official server): "
+    read BW_URL
+    if [ -z "$BW_URL" ]; then
+        BW_URL="https://api.bitwarden.com"
+    fi
+
+    echo -ne "Enter your Bitwarden email: "
+    read BW_EMAIL
     
-#     # 进入一个带有 rbw 的 shell 让用户登录
-#     echo "Configuring rbw..."
-#     nix shell nixpkgs#rbw -c bash -c "rbw config set base_url $BW_URL && rbw config set email $BW_EMAIL && echo 'Please enter your master password to login:' && rbw login"
-# fi
+    # 进入一个带有 rbw 的 shell 让用户登录
+    echo "Configuring rbw..."
+    nix shell nixpkgs#rbw -c bash -c "rbw config set base_url $BW_URL && rbw config set email $BW_EMAIL && echo 'Please enter your master password to login:' && rbw login"
+fi
 
-# # 提示用户输入 Bitwarden 中的密钥项名称
-# echo -ne "Enter the Bitwarden item name for ${SELECTED_HOST}'s SSH key: "
-# read BW_ITEM_NAME
+# 提示用户输入 Bitwarden 中的密钥项名称
+echo -ne "Enter the Bitwarden item name for ${SELECTED_HOST}'s SSH key: "
+read BW_ITEM_NAME
 
-# # 拉取密钥并写入目标位置
-# echo "Fetching key '$BW_ITEM_NAME'..."
-# if nix run nixpkgs#rbw -- get "$BW_ITEM_NAME" > /mnt/etc/ssh/ssh_host_ed25519_key; then
-#     # 设置正确权限
-#     chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
-#     echo -e "${GREEN}SSH key restored and permissions set.${NC}"
-# else
-#     echo -e "${RED}Failed to fetch key! Please check the item name or your login status.${NC}"
-#     echo -e "${RED}You MUST manually copy the correct ssh_host_ed25519_key to /mnt/etc/ssh/ before rebooting!${NC}"
-#     echo -e "${RED}Otherwise you will be locked out.${NC}"
-# fi
+# 拉取密钥并写入目标位置
+echo "Fetching key '$BW_ITEM_NAME'..."
+if nix run nixpkgs#rbw -- get "$BW_ITEM_NAME" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key && \
+   nix run nixpkgs#rbw -- get "$BW_ITEM_NAME" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
+    # 设置正确权限
+    chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
+    chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
+    echo -e "${GREEN}SSH keys restored and permissions set.${NC}"
+else
+    echo -e "${RED}Failed to fetch keys! Please check the item name or your login status.${NC}"
+    echo -e "${RED}You MUST manually copy the correct ssh_host_ed25519_key and .pub to /mnt/etc/ssh/ before rebooting!${NC}"
+    echo -e "${RED}Otherwise you will be locked out.${NC}"
+fi
 
 echo -e "\n${GREEN}You can type 'reboot' to restart into the new system.${NC}"

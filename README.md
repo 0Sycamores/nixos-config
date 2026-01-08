@@ -5,4 +5,3 @@
 ```bash
 bash <(curl -fsSL nixos.sycamore.icu/install)
 ```
-

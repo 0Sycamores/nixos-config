@@ -1,3 +1,5 @@
+{ vars, ... }:
+
 {
   disko.devices.disk.main = {
     device = "/dev/nvme0n1"; 
@@ -29,20 +31,32 @@
                 mountOptions = [ "compress=zstd" "noatime" ];
               };
               "/@home" = { 
-                mountpoint = "/home"; 
+                mountpoint = "/home";
                 mountOptions = [ "compress=zstd" "noatime" ];
               };
               "/@nix" = { 
-                mountpoint = "/nix"; 
+                mountpoint = "/nix";
                 mountOptions = [ "compress=zstd" "noatime" ]; 
               };
-              "/@snapshots" = { 
-                mountpoint = "/home/.snapshots"; 
-                mountOptions = [ "compress=zstd" "noatime" ]; 
+              "/@log" = {
+                mountpoint = "/var/log";
+                mountOptions = [ "compress=zstd" "noatime" ];
               };
-              "/@games" = { 
-                mountpoint = "/games";
-                mountOptions = [ "nodatacow" "noatime" ]; 
+              "/@snapshots" = {
+                mountpoint = "/.snapshots";
+                mountOptions = [ "compress=zstd" "noatime" ];
+              };
+              "/@downloads" = {
+                mountpoint = "/home/${vars.username}/Downloads";
+                mountOptions = [ "nodatacow" "noatime" ];
+              };
+              "/@videos" = {
+                mountpoint = "/home/${vars.username}/Videos";
+                mountOptions = [ "nodatacow" "noatime" ];
+              };
+              "/@games" = {
+                mountpoint = "/home/${vars.username}/Games";
+                mountOptions = [ "nodatacow" "noatime" ];
               };
             };
           };

@@ -46,6 +46,11 @@
     "sp5100_tco" # AMD 的看门狗
   ];
 
+  # 1. 启用 Zram (替代 Swap)
+  zramSwap.enable = true;
+  # 建议配置内存上限
+  zramSwap.memoryPercent = 50; 
+
   networking.networkmanager.enable = true;
 
   time.timeZone = vars.timeZone;
@@ -78,7 +83,6 @@
     wget
     curl
     git
-    distro-grub-themes
   ];
 
   system.stateVersion = vars.stateVersion;

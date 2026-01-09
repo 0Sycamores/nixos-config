@@ -261,26 +261,7 @@ partition_and_format() {
 }
 
 #######################################
-# 步骤 7: 安装 NixOS。
-# 生成 hardware-configuration.nix 并运行 nixos-install。
-#######################################
-install_nixos() {
-    step "[7/8] Generating hardware config and installing..."
-
-    # 生成 hardware.nix
-    nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > "hosts/${SELECTED_HOST}/hardware.nix"
-    
-    # 添加到 git 以便 flakes 可以看到它 (如果使用基于 git 的 flake 源)
-    git add "hosts/${SELECTED_HOST}/hardware.nix"
-
-    info "Starting NixOS installation (${SELECTED_HOST})..."
-    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
-
-    step "=== Installation Complete! ==="
-}
-
-#######################################
-# 步骤 8: 恢复 SSH 密钥。
+# 步骤 7: 恢复 SSH 密钥。
 # 使用 rbw (Bitwarden CLI) 获取 SSH 主机密钥以保留身份。
 #######################################
 restore_ssh_keys() {
@@ -324,6 +305,25 @@ restore_ssh_keys() {
 }
 
 #######################################
+# 步骤 8: 安装 NixOS。
+# 生成 hardware-configuration.nix 并运行 nixos-install。
+#######################################
+install_nixos() {
+    step "[8/8] Generating hardware config and installing..."
+
+    # 生成 hardware.nix
+    nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > "hosts/${SELECTED_HOST}/hardware.nix"
+    
+    # 添加到 git 以便 flakes 可以看到它 (如果使用基于 git 的 flake 源)
+    git add "hosts/${SELECTED_HOST}/hardware.nix"
+
+    info "Starting NixOS installation (${SELECTED_HOST})..."
+    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
+
+    step "=== Installation Complete! ==="
+}
+
+#######################################
 # 主执行入口点。
 # 编排安装步骤。
 #######################################
@@ -339,8 +339,8 @@ main() {
     select_disk
     inject_hardware_config
     partition_and_format
-    install_nixos
     restore_ssh_keys
+    install_nixos
     
     step "You can type 'reboot' to restart into the new system."
 }

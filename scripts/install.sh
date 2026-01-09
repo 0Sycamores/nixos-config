@@ -75,11 +75,8 @@ cleanup() {
 
         # 检查 /mnt 是否已挂载
         if grep -qs "/mnt" /proc/mounts; then
-            info "Unmounting /mnt..."
-            # 尝试关闭 swap (防止锁住磁盘)
-            swapoff -a || true
-            # 递归卸载
-            umount -R /mnt || err "Warning: Failed to unmount /mnt."
+            info "⚠️  The system is still mounted at /mnt for debugging."
+            info "   You can unmount it manually by running: umount -R /mnt"
         fi
         
         err "Cleanup complete."

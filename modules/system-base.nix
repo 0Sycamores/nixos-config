@@ -128,6 +128,9 @@
   # System Environment
   # =================================================================================
 
+  # 必须在系统级启用 Fish，才能将其用作登录 Shell
+  programs.fish.enable = true;
+
   # 系统级基础软件包
   environment.systemPackages = with pkgs; [
     wget

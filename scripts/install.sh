@@ -121,16 +121,16 @@ prepare_environment() {
         export http_proxy="${proxy_addr}"
         export https_proxy="${proxy_addr}"
         info "Proxy set: ${proxy_addr}"
+    fi
 
-        info "Testing GitHub connectivity..."
-        if curl -s --head --connect-timeout 5 https://github.com > /dev/null; then
-            success "GitHub connection successful!"
-        else
-            err "GitHub connection failed!"
-            read -r -p "Do you want to continue anyway? [y/N]: " continue_anyway
-            if [[ "${continue_anyway}" != "y" && "${continue_anyway}" != "Y" ]]; then
-                exit 1
-            fi
+    info "Testing GitHub connectivity..."
+    if curl -s --head --connect-timeout 5 https://github.com > /dev/null; then
+        success "GitHub connection successful!"
+    else
+        err "GitHub connection failed!"
+        read -r -p "Do you want to continue anyway? [y/N]: " continue_anyway
+        if [[ "${continue_anyway}" != "y" && "${continue_anyway}" != "Y" ]]; then
+            exit 1
         fi
     fi
 
@@ -256,8 +256,9 @@ inject_hardware_config() {
 #######################################
 partition_and_format() {
     step "[6/8] Executing Disko partitioning..."
-    # 使用上游 Disko (github:nix-community/disko) 避免本地废弃警告
-    nix run github:nix-community/disko -- --mode disko "./hosts/${SELECTED_HOST}/disko.nix"
+    # 使用 Flake 锁定的 Disko 版本
+    # 使用明确的模式列表代替 --mode disko，以符合新版规范
+    nix run .#disko -- --mode destroy,format,mount "./hosts/${SELECTED_HOST}/disko.nix"
 }
 
 #######################################
@@ -271,7 +272,8 @@ restore_ssh_keys() {
     mkdir -p /mnt/etc/ssh
 
     # 检查 rbw 是否已认证
-    if ! nix run nixpkgs#rbw -- unlocked 2>/dev/null; then
+    # 使用 nix shell 引入 pinentry-curses 以支持密码输入
+    if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw unlocked 2>/dev/null; then
         info "Please login to Bitwarden (rbw) to fetch the SSH key."
 
         read -r -p "Enter Bitwarden server URL (Leave empty for official server): " bw_url
@@ -281,18 +283,20 @@ restore_ssh_keys() {
 
         read -r -p "Enter your Bitwarden email: " bw_email
         
-        # 进入带有 rbw 的子 shell 让用户交互式登录
+        # 进入带有 rbw 和 pinentry-curses 的子 shell 让用户交互式登录
+        # 并显式配置 pinentry 程序
         info "Configuring rbw..."
-        nix shell nixpkgs#rbw -c bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && echo 'Please enter your master password to login:' && rbw login"
+        nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && rbw config set pinentry pinentry-curses && echo 'Please enter your master password to login:' && rbw login"
     fi
 
     # 提示输入 Bitwarden 中的密钥项名称
     read -r -p "Enter the Bitwarden item name for ${SELECTED_HOST}'s SSH key: " bw_item_name
 
     # 获取密钥
+    # 同样需要 pinentry-curses 环境，以防 agent 超时需要重新认证
     info "Fetching key '${bw_item_name}'..."
-    if nix run nixpkgs#rbw -- get "${bw_item_name}" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key && \
-       nix run nixpkgs#rbw -- get "${bw_item_name}" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
+    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key && \
+       nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
         # 设置正确权限
         chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
         chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub

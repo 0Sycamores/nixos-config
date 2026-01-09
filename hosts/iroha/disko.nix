@@ -19,7 +19,7 @@
   - @snapshots: Btrfs 快照存放点
   - @downloads/videos/games: 媒体/游戏目录，禁用 COW (Copy-on-Write) 以提升性能
 */
-{ vars, ... }:
+{ vars ? import ../../modules/vars.nix, ... }:
 
 {
   disko.devices.disk.main = {

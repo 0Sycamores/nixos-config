@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 #
-# NixOS 多主机安装程序
+# ======================================================================================
+# NixOS Multi-Host Automated Installer / NixOS 多主机自动化安装程序
+# ======================================================================================
 #
-# 此脚本通过从 Git 仓库拉取配置、分区磁盘并安装系统，
-# 在目标机器上安装 NixOS。
-# 旨在在裸机 NixOS ISO 环境中运行。
+# 描述 (Description):
+#   此脚本用于在裸机环境下自动化安装 NixOS。它设计用于官方 NixOS ISO 环境。
+#   主要功能包括：
+#   1. 环境准备：检测网络、配置代理、启用 Flakes。
+#   2. 配置拉取：自动从 GitHub 克隆最新的 NixOS 配置仓库。
+#   3. 主机选择：动态解析 `hosts/` 目录，允许用户选择目标主机配置。
+#   4. 密钥恢复：集成 Bitwarden CLI (rbw)，安全恢复 SSH 主机密钥以保持身份一致性。
+#   5. 磁盘管理：交互式选择目标磁盘，并发出数据清除警告。
+#   6. 自动分区：使用 Disko 根据配置文件自动执行磁盘分区和格式化。
+#   7. 系统安装：生成硬件配置，持久化密钥和配置，并执行 nixos-install。
+#
+# 前置条件 (Prerequisites):
+#   - 必须在 NixOS Live ISO 环境中运行。
+#   - 必须能连通Github。
+#   - 需要 Bitwarden 账户和已存储的 SSH 主机密钥条目。
+#   - 目标机器应支持 UEFI 启动（推荐）。
+#
+# 用法 (Usage):
+#   通常通过 curl 或 wget 直接执行：
+#   curl -L https://raw.githubusercontent.com/0Sycamores/nixos-config/main/scripts/install.sh | bash
+#   或
+#   bash <(curl -fsSL nixos.sycamore.icu/install)
+#
+# 作者 (Author): Sycamore
+# 仓库 (Repository): https://github.com/0Sycamores/nixos-config
+# ======================================================================================
 
 set -e
 
@@ -21,6 +46,7 @@ readonly NC=$'\033[0m' # No Color
 # 这些变量维护跨函数的状态
 SELECTED_HOST=""
 TARGET_DISK=""
+TEMP_KEY_DIR=""
 
 # --- 日志辅助函数 ---
 
@@ -67,6 +93,12 @@ step() {
 #######################################
 cleanup() {
     local exit_code=$?
+
+    # 安全清理临时密钥目录
+    if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
+        rm -rf "${TEMP_KEY_DIR}"
+    fi
+
     if [[ "${exit_code}" -ne 0 ]]; then
         printf "\n" >&2
         err "❌ Script exited with error code ${exit_code}."
@@ -209,73 +241,34 @@ select_host() {
 }
 
 #######################################
-# 步骤 4: 选择目标磁盘。
-# 列出物理磁盘并提示用户选择一个。
-# 检查现有的 Windows 分区以警告用户。
-# 设置全局 TARGET_DISK。
-#######################################
-select_disk() {
-    step "[4/8] Select target disk"
-    lsblk -d -n -o NAME,SIZE,MODEL,TYPE | grep "disk"
-    
-    while true; do
-        read -r -p "Please enter target disk name (e.g., sda or nvme0n1): " disk_name
-        TARGET_DISK="/dev/${disk_name}"
-
-        if [[ -b "${TARGET_DISK}" ]]; then
-            break
-        else
-            err "Error: Device ${TARGET_DISK} not found, please try again."
-        fi
-    done
-
-    # 检查 Windows 分区 (NTFS)
-    if lsblk "${TARGET_DISK}" -o FSTYPE | grep -q -i "ntfs"; then
-        err "⚠️  POTENTIAL WINDOWS SYSTEM DETECTED ON ${TARGET_DISK}!"
-        err "   Found NTFS partition(s). Installing NixOS will ERASE EVERYTHING including Windows."
-    fi
-
-    err "Warning: All data on ${TARGET_DISK} will be cleared!"
-    read -r -p "Confirm to continue? (yes/no): " confirm_disk
-    if [[ "${confirm_disk}" != "yes" ]]; then
-        info "Cancelled."
-        exit 1
-    fi
-}
-
-#######################################
-# 步骤 5: 注入硬件配置。
-# 将 disko.nix 中的磁盘设备替换为选定的目标磁盘。
-#######################################
-inject_hardware_config() {
-    step "[5/8] Injecting hardware configuration..."
-
-    # 修改 Disko 配置
-    # 匹配 device = "..."; 并替换为实际目标磁盘
-    sed -i "s|device = \".*\";|device = \"${TARGET_DISK}\";|" "hosts/${SELECTED_HOST}/disko.nix"
-    info "Installation target set to ${TARGET_DISK}"
-}
-
-#######################################
-# 步骤 6: 分区和格式化。
-# 在 'disko' 模式下运行 disko 以应用分区和格式化。
-#######################################
-partition_and_format() {
-    step "[6/8] Executing Disko partitioning..."
-    # 使用 Flake 锁定的 Disko 版本
-    # 使用明确的模式列表代替 --mode disko，以符合新版规范
-    nix run .#disko -- --mode destroy,format,mount --yes-wipe-all-disks "./hosts/${SELECTED_HOST}/disko.nix"
-}
-
-#######################################
-# 步骤 7: 恢复 SSH 密钥。
+# 步骤 4: 恢复 SSH 密钥。
 # 使用 rbw (Bitwarden CLI) 获取 SSH 主机密钥以保留身份。
 #######################################
 restore_ssh_keys() {
-    step "[8/8] Restoring SSH Host Keys from Bitwarden..."
+    step "[4/8] Restoring SSH Host Keys from Bitwarden..."
 
-    # 确保目标目录存在
-    mkdir -p /mnt/etc/ssh
+    # 使用 mktemp 创建安全的临时目录
+    TEMP_KEY_DIR=$(mktemp -d)
+    chmod 700 "$TEMP_KEY_DIR"
+
+    # 内部辅助函数：获取单个密钥字段
+    # 参数: item_name, field_name, output_file
+    _fetch_key_field() {
+        local item="$1"
+        local field="$2"
+        local out="$3"
+        
+        if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${item}" -f "${field}" > "${out}"; then
+            if [[ ! -s "${out}" ]]; then
+                err "Error: File '${out}' is empty. Field '${field}' might be missing in Bitwarden item."
+                return 1
+            fi
+            return 0
+        else
+            err "Error: Failed to fetch '${field}' from Bitwarden."
+            return 1
+        fi
+    }
 
     # 检查 rbw 是否已认证
     # 使用 nix shell 引入 pinentry-curses 以支持密码输入
@@ -308,46 +301,96 @@ restore_ssh_keys() {
 
     # 获取私钥
     info "Fetching private key..."
-    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key; then
-        if [[ ! -s /mnt/etc/ssh/ssh_host_ed25519_key ]]; then
-            err "Error: Private key file is empty. Field 'private_key' might be missing in Bitwarden item."
-            fetch_success=false
-        fi
-    else
-        err "Error: Failed to execute rbw command for private key."
+    if ! _fetch_key_field "${bw_item_name}" "private_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key"; then
         fetch_success=false
     fi
 
     # 获取公钥
     info "Fetching public key..."
-    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
-        if [[ ! -s /mnt/etc/ssh/ssh_host_ed25519_key.pub ]]; then
-            err "Error: Public key file is empty. Field 'public_key' might be missing in Bitwarden item."
-            fetch_success=false
-        fi
-    else
-        err "Error: Failed to execute rbw command for public key."
+    if ! _fetch_key_field "${bw_item_name}" "public_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"; then
         fetch_success=false
     fi
 
     if [[ "$fetch_success" == "true" ]]; then
         # 设置正确权限
-        chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
-        chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
-        success "SSH keys restored and permissions set."
+        chmod 600 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
+        chmod 644 "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
+        success "SSH keys fetched successfully."
 
-        # 临时复制密钥到当前 ISO 环境，以便 sops-nix 在构建时可以解密 secrets
+        # 复制密钥到当前 ISO 环境，以便 sops-nix 在构建时可以解密 secrets
         info "Copying keys to current environment for sops-nix decryption..."
-        cp /mnt/etc/ssh/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
-        cp /mnt/etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub
+        mkdir -p /etc/ssh
+        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key" /etc/ssh/ssh_host_ed25519_key
+        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub" /etc/ssh/ssh_host_ed25519_key.pub
         # 确保当前环境也有正确权限
         chmod 600 /etc/ssh/ssh_host_ed25519_key
     else
         err "Failed to fetch keys properly!"
-        err "You MUST manually copy the correct ssh_host_ed25519_key and .pub to /mnt/etc/ssh/ before rebooting!"
-        err "Otherwise you will be locked out."
+        err "Aborting installation to prevent lockout."
+        exit 1
     fi
 }
+
+#######################################
+# 步骤 5: 选择目标磁盘。
+# 列出物理磁盘并提示用户选择一个。
+# 检查现有的 Windows 分区以警告用户。
+# 设置全局 TARGET_DISK。
+#######################################
+select_disk() {
+    step "[5/8] Select target disk"
+    lsblk -d -n -o NAME,SIZE,MODEL,TYPE | grep "disk"
+    
+    while true; do
+        read -r -p "Please enter target disk name (e.g., sda or nvme0n1): " disk_name
+        TARGET_DISK="/dev/${disk_name}"
+
+        if [[ -b "${TARGET_DISK}" ]]; then
+            break
+        else
+            err "Error: Device ${TARGET_DISK} not found, please try again."
+        fi
+    done
+
+    # 检查 Windows 分区 (NTFS)
+    if lsblk "${TARGET_DISK}" -o FSTYPE | grep -q -i "ntfs"; then
+        err "⚠️  POTENTIAL WINDOWS SYSTEM DETECTED ON ${TARGET_DISK}!"
+        err "   Found NTFS partition(s). Installing NixOS will ERASE EVERYTHING including Windows."
+    fi
+
+    err "Warning: All data on ${TARGET_DISK} will be cleared!"
+    read -r -p "Confirm to continue? (yes/no): " confirm_disk
+    if [[ "${confirm_disk}" != "yes" ]]; then
+        info "Cancelled."
+        exit 1
+    fi
+}
+
+#######################################
+# 步骤 6: 注入硬件配置。
+# 将 disko.nix 中的磁盘设备替换为选定的目标磁盘。
+#######################################
+inject_hardware_config() {
+    step "[6/8] Injecting hardware configuration..."
+
+    # 修改 Disko 配置
+    # 匹配 device = "..."; 并替换为实际目标磁盘
+    sed -i "s|device = \".*\";|device = \"${TARGET_DISK}\";|" "hosts/${SELECTED_HOST}/disko.nix"
+    info "Installation target set to ${TARGET_DISK}"
+}
+
+#######################################
+# 步骤 7: 分区和格式化。
+# 在 'disko' 模式下运行 disko 以应用分区和格式化。
+#######################################
+partition_and_format() {
+    step "[7/8] Executing Disko partitioning..."
+    # 使用 Flake 锁定的 Disko 版本 (确保环境一致性)
+    # --mode destroy,format,mount: 依次执行销毁旧数据、格式化新分区、挂载到 /mnt
+    # --yes-wipe-all-disks: 非交互式确认擦除所有数据 (脚本前面已通过 select_disk 确认过)
+    nix run .#disko -- --mode destroy,format,mount --yes-wipe-all-disks "./hosts/${SELECTED_HOST}/disko.nix"
+}
+
 
 #######################################
 # 步骤 8: 安装 NixOS。
@@ -359,21 +402,42 @@ install_nixos() {
     # 生成 hardware.nix
     nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > "hosts/${SELECTED_HOST}/hardware.nix"
     
-    # 添加到 git 以便 flakes 可以看到它 (如果使用基于 git 的 flake 源)
-    git add "hosts/${SELECTED_HOST}/hardware.nix"
+    # 暂存所有修改 (包含新生成的 hardware.nix 和修改过的 disko.nix)
+    # 这一步对于基于 Git 的 Flake 至关重要，否则未追踪的文件可能被忽略
+    git add .
 
     # 将配置复制到新系统
-    # 按照惯例，放在 /etc/nixos 比较合适，因为这是 NixOS 的默认配置位置，且不会弄乱用户主目录
-    step "Persisting configuration to /mnt/etc/nixos..."
+    # 按照惯例，放在 /etc/nixos 比较合适，因为这是 NixOS 的默认配置位置
+    step "Persisting configuration and keys to /mnt..."
+    
+    # 1. 复制 NixOS 配置
+    # 先清理目标目录，防止残留文件干扰
+    if [[ -d "/mnt/etc/nixos" ]]; then
+        rm -rf /mnt/etc/nixos
+    fi
     mkdir -p /mnt/etc/nixos
-    # 使用 rsync 或 cp 复制，排除 .git 目录以减小体积（或者保留 git 以便后续版本控制，这里选择保留以便直接使用 git）
-    cp -r . /mnt/etc/nixos/
+    
+    # 复制当前目录所有内容（包含 .git，保留版本控制能力）
+    # 使用 ./. 确保隐藏文件也被复制
+    cp -r ./. /mnt/etc/nixos/
     info "Configuration copied to /mnt/etc/nixos"
+
+    # 2. 复制 SSH 密钥
+    if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
+        mkdir -p /mnt/etc/ssh
+        cp "${TEMP_KEY_DIR}"/* /mnt/etc/ssh/
+        chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
+        chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
+        info "SSH keys copied to /mnt/etc/ssh"
+    else
+        err "Warning: Temporary keys not found, SSH keys might not be persisted!"
+    fi
 
     info "Starting NixOS installation (${SELECTED_HOST})..."
     # 注意：这里使用 --flake /mnt/etc/nixos#... 来指向已经复制进去的配置
     # 这样可以确保安装的是最终持久化在磁盘上的那个版本
-    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake "/mnt/etc/nixos#${SELECTED_HOST}" --show-trace
+    # 使用 --no-root-passwd 因为我们通常在配置中声明了用户密码或使用 SSH 密钥
+    nixos-install --no-root-passwd --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake "/mnt/etc/nixos#${SELECTED_HOST}" --show-trace
 
     step "=== Installation Complete! ==="
 }
@@ -391,10 +455,10 @@ main() {
     prepare_environment
     fetch_configuration
     select_host
+    restore_ssh_keys
     select_disk
     inject_hardware_config
     partition_and_format
-    restore_ssh_keys
     install_nixos
     
     step "You can type 'reboot' to restart into the new system."

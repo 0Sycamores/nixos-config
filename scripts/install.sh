@@ -13,9 +13,9 @@ readonly REPO_URL="https://github.com/0Sycamores/nixos-config"
 readonly TARGET_DIR="/tmp/nixos-install"
 
 # --- 颜色 ---
-readonly GREEN='\033[0;32m'
-readonly RED='\033[0;31m'
-readonly NC='\033[0m' # No Color
+readonly GREEN=$'\033[0;32m'
+readonly RED=$'\033[0;31m'
+readonly NC=$'\033[0m' # No Color
 
 # --- 全局状态 ---
 # 这些变量维护跨函数的状态
@@ -62,7 +62,6 @@ step() {
 
 #######################################
 # 在退出或出错时运行的清理函数。
-# 如果需要，递归卸载 /mnt 以使系统处于干净状态。
 # 局部变量:
 #   exit_code: 脚本的退出代码。
 #######################################
@@ -265,7 +264,7 @@ partition_and_format() {
     step "[6/8] Executing Disko partitioning..."
     # 使用 Flake 锁定的 Disko 版本
     # 使用明确的模式列表代替 --mode disko，以符合新版规范
-    nix run .#disko -- --mode destroy,format,mount "./hosts/${SELECTED_HOST}/disko.nix"
+    nix run .#disko -- --mode destroy,format,mount --yes-wipe-all-disks "./hosts/${SELECTED_HOST}/disko.nix"
 }
 
 #######################################

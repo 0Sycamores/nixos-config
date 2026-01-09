@@ -112,8 +112,8 @@
   # Git 全局配置
   programs.git = {
     enable = true;
-    userName = vars.userFullName;
-    userEmail = vars.userEmail;
+    user.name = vars.userFullName;
+    user.email = vars.userEmail;
   };
 
   # =================================================================================

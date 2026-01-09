@@ -186,13 +186,16 @@ select_host() {
         ((i++))
     done
 
-    read -r -p "Please enter the number to select a host: " host_index
-
-    # 验证输入
-    if [[ ! "${host_index}" =~ ^[0-9]+$ ]] || [[ "${host_index}" -lt 1 ]] || [[ "${host_index}" -gt "${#hosts[@]}" ]]; then
-        err "Error: Invalid selection"
-        exit 1
-    fi
+    while true; do
+        read -r -p "Please enter the number to select a host: " host_index
+        
+        # 验证输入
+        if [[ "${host_index}" =~ ^[0-9]+$ ]] && [[ "${host_index}" -ge 1 ]] && [[ "${host_index}" -le "${#hosts[@]}" ]]; then
+            break
+        else
+            err "Error: Invalid selection, please try again."
+        fi
+    done
 
     # 设置全局选中主机
     SELECTED_HOST="${hosts[$((host_index-1))]}"
@@ -215,13 +218,17 @@ select_host() {
 select_disk() {
     step "[4/8] Select target disk"
     lsblk -d -n -o NAME,SIZE,MODEL,TYPE | grep "disk"
-    read -r -p "Please enter target disk name (e.g., sda or nvme0n1): " disk_name
-    TARGET_DISK="/dev/${disk_name}"
+    
+    while true; do
+        read -r -p "Please enter target disk name (e.g., sda or nvme0n1): " disk_name
+        TARGET_DISK="/dev/${disk_name}"
 
-    if [[ ! -b "${TARGET_DISK}" ]]; then
-        err "Error: Device ${TARGET_DISK} not found"
-        exit 1
-    fi
+        if [[ -b "${TARGET_DISK}" ]]; then
+            break
+        else
+            err "Error: Device ${TARGET_DISK} not found, please try again."
+        fi
+    done
 
     # 检查 Windows 分区 (NTFS)
     if lsblk "${TARGET_DISK}" -o FSTYPE | grep -q -i "ntfs"; then
@@ -279,6 +286,8 @@ restore_ssh_keys() {
         read -r -p "Enter Bitwarden server URL (Leave empty for official server): " bw_url
         if [[ -z "${bw_url}" ]]; then
             bw_url="https://api.bitwarden.com"
+        elif [[ "${bw_url}" != http://* ]] && [[ "${bw_url}" != https://* ]]; then
+            bw_url="https://${bw_url}"
         fi
 
         read -r -p "Enter your Bitwarden email: " bw_email
@@ -295,14 +304,47 @@ restore_ssh_keys() {
     # 获取密钥
     # 同样需要 pinentry-curses 环境，以防 agent 超时需要重新认证
     info "Fetching key '${bw_item_name}'..."
-    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key && \
-       nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
+
+    local fetch_success=true
+
+    # 获取私钥
+    info "Fetching private key..."
+    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f private_key > /mnt/etc/ssh/ssh_host_ed25519_key; then
+        if [[ ! -s /mnt/etc/ssh/ssh_host_ed25519_key ]]; then
+            err "Error: Private key file is empty. Field 'private_key' might be missing in Bitwarden item."
+            fetch_success=false
+        fi
+    else
+        err "Error: Failed to execute rbw command for private key."
+        fetch_success=false
+    fi
+
+    # 获取公钥
+    info "Fetching public key..."
+    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f public_key > /mnt/etc/ssh/ssh_host_ed25519_key.pub; then
+        if [[ ! -s /mnt/etc/ssh/ssh_host_ed25519_key.pub ]]; then
+            err "Error: Public key file is empty. Field 'public_key' might be missing in Bitwarden item."
+            fetch_success=false
+        fi
+    else
+        err "Error: Failed to execute rbw command for public key."
+        fetch_success=false
+    fi
+
+    if [[ "$fetch_success" == "true" ]]; then
         # 设置正确权限
         chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
         chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
         success "SSH keys restored and permissions set."
+
+        # 临时复制密钥到当前 ISO 环境，以便 sops-nix 在构建时可以解密 secrets
+        info "Copying keys to current environment for sops-nix decryption..."
+        cp /mnt/etc/ssh/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
+        cp /mnt/etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub
+        # 确保当前环境也有正确权限
+        chmod 600 /etc/ssh/ssh_host_ed25519_key
     else
-        err "Failed to fetch keys! Please check the item name or your login status."
+        err "Failed to fetch keys properly!"
         err "You MUST manually copy the correct ssh_host_ed25519_key and .pub to /mnt/etc/ssh/ before rebooting!"
         err "Otherwise you will be locked out."
     fi
@@ -321,8 +363,18 @@ install_nixos() {
     # 添加到 git 以便 flakes 可以看到它 (如果使用基于 git 的 flake 源)
     git add "hosts/${SELECTED_HOST}/hardware.nix"
 
+    # 将配置复制到新系统
+    # 按照惯例，放在 /etc/nixos 比较合适，因为这是 NixOS 的默认配置位置，且不会弄乱用户主目录
+    step "Persisting configuration to /mnt/etc/nixos..."
+    mkdir -p /mnt/etc/nixos
+    # 使用 rsync 或 cp 复制，排除 .git 目录以减小体积（或者保留 git 以便后续版本控制，这里选择保留以便直接使用 git）
+    cp -r . /mnt/etc/nixos/
+    info "Configuration copied to /mnt/etc/nixos"
+
     info "Starting NixOS installation (${SELECTED_HOST})..."
-    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
+    # 注意：这里使用 --flake /mnt/etc/nixos#... 来指向已经复制进去的配置
+    # 这样可以确保安装的是最终持久化在磁盘上的那个版本
+    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake "/mnt/etc/nixos#${SELECTED_HOST}" --show-trace
 
     step "=== Installation Complete! ==="
 }
@@ -334,7 +386,7 @@ install_nixos() {
 main() {
     # Set trap for cleanup on exit or interrupt
     trap cleanup EXIT INT TERM
-    
+    clear
     success "=== NixOS Multi-Host Installer ==="
 
     prepare_environment

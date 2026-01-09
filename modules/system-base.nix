@@ -1,10 +1,30 @@
+/*
+  ===================================================================================
+  System Base Configuration
+  ===================================================================================
+  此模块定义了所有主机共用的基础系统配置。
+  
+  包含:
+  1. Nix 自身配置 (Flakes, 镜像源)
+  2. 启动引导 (Bootloader - GRUB)
+  3. 内核参数与模块管理
+  4. 内存管理 (ZRAM)
+  5. 基础网络与时区
+  6. SSH 服务与安全
+  7. 用户账号管理
+  8. 核心系统软件包
+*/
 { config, pkgs, vars, ... }:
 
 {
-  # 开启 Nix Flakes
+  # =================================================================================
+  # Nix Settings
+  # =================================================================================
+
+  # 启用 Nix Command 和 Flakes 支持
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  
-  # 使用国内镜像加速下载
+
+  # 配置国内镜像源以加速下载 (USTC, SJTU)
   nix.settings = {
     substituters = [
       "https://mirrors.ustc.edu.cn/nix-channels/store"
@@ -16,15 +36,24 @@
     ];
   };
 
-  # 引导加载器 (GRUB)
+  # =================================================================================
+  # Boot & Kernel
+  # =================================================================================
+
+  # 禁用 systemd-boot, 使用 GRUB
   boot.loader.systemd-boot.enable = false;
+  
+  # 允许修改 EFI 变量
   boot.loader.efi.canTouchEfiVariables = true;
+
+  # GRUB 引导加载程序配置
   boot.loader.grub = {
     enable = true;
     efiSupport = true;
-    device = "nodev";
-    useOSProber = true;
-    default = "saved"; # 记忆上次启动项
+    device = "nodev";      # EFI 系统不需要指定设备
+    useOSProber = true;    # 自动检测其他操作系统
+    default = "saved";     # 记住上次选择的启动项
+    # CyberPunk 主题配置
     theme = pkgs.fetchFromGitHub {
         owner = "adnksharp";
         repo = "CyberGRUB-2077";
@@ -33,57 +62,79 @@
     };
   };
 
-  # 内核参数优化
+  # 内核参数调优
   boot.kernelParams = [
-    "nowatchdog"      # 禁用看门狗加速启动和关机
-    "zswap.enabled=0" # 禁用zswap 防止和zram冲突
-    "loglevel=5"      # 启动日志开到5级
+    "nowatchdog"      # 禁用硬件看门狗
+    "zswap.enabled=0" # 禁用 ZSwap (使用 ZRam 代替)
+    "loglevel=5"      # 设置引导日志级别
   ];
 
   # 禁用不需要的内核模块
   boot.blacklistedKernelModules = [
-    "iTCO_wdt"   # intel 的看门狗
-    "sp5100_tco" # AMD 的看门狗
+    "iTCO_wdt"     # Intel Watchdog
+    "sp5100_tco"   # AMD/ATI Watchdog
   ];
 
-  # 1. 启用 Zram (替代 Swap)
-  zramSwap.enable = true;
-  # 建议配置内存上限
-  zramSwap.memoryPercent = 50; 
+  # =================================================================================
+  # Memory & Performance
+  # =================================================================================
 
+  # 启用 ZRam (内存压缩交换)
+  zramSwap.enable = true;
+  zramSwap.memoryPercent = 50; # 使用 50% 内存作为 ZRam
+
+  # =================================================================================
+  # Network & Time
+  # =================================================================================
+
+  # 启用 NetworkManager
   networking.networkmanager.enable = true;
 
+  # 设置时区 (引用 vars)
   time.timeZone = vars.timeZone;
 
-  # 开启 SSH 服务，禁止 root 登录
+  # =================================================================================
+  # Services & Security
+  # =================================================================================
+
+  # OpenSSH 服务
   services.openssh = {
     enable = true;
-    settings.PermitRootLogin = "no";
+    settings.PermitRootLogin = "no"; # 禁止 Root 远程登录
   };
 
-  # 禁止手动修改密码
+  # =================================================================================
+  # Users & Permissions
+  # =================================================================================
+
+  # 禁止命令修改用户 (强制声明式管理)
   users.mutableUsers = false;
-  
-  # Root 用户
+
+  # Root 用户 (密码由 sops 管理)
   users.users.root = {
     hashedPasswordFile = config.sops.secrets.root_password.path;
   };
 
-  # Wheel 用户
+  # 主用户配置
   users.users.${vars.username} = {
     isNormalUser = true;
     description = "${vars.username}";
     extraGroups = [ "networkmanager" "wheel" ];
     hashedPasswordFile = config.sops.secrets.user_password.path;
-    shell = pkgs.fish;
+    shell = pkgs.fish; # 使用 Fish Shell
   };
 
-  # 系统级基础软件
+  # =================================================================================
+  # System Environment
+  # =================================================================================
+
+  # 系统级基础软件包
   environment.systemPackages = with pkgs; [
     wget
     curl
     git
   ];
 
+  # NixOS 版本状态 (请勿随意修改)
   system.stateVersion = vars.stateVersion;
 }

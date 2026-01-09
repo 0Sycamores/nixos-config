@@ -1,25 +1,42 @@
+/*
+  ===================================================================================
+  SOPS Secrets Management Configuration
+  ===================================================================================
+  该模块配置 SOPS (Secrets OPerationS) 用于加密和管理敏感信息。
+  
+  功能:
+  1. 指定密钥文件位置 (age keys)。
+  2. 定义敏感信息文件 (secrets.yaml)。
+  3. 声明具体的 secrets 并设置其权限。
+  
+  注意:
+  加密文件 (secrets.yaml) 应提交到 Git，但 key 文件绝对不能提交。
+*/
 { config, ... }:
 
-{ 
+{
   sops = {
-    # 加密文件路径 
+    # 默认 SOPS 文件路径 (相对于当前文件或使用绝对路径)
     defaultSopsFile = ../secrets/secrets.yaml;
+    
+    # 默认文件格式 (YAML, JSON, BINARY 等)
     defaultSopsFormat = "yaml";
 
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    age.keyFile = "/var/lib/sops-nix/key.txt";
+    # Age 密钥相关配置
+    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ]; # 使用主机 SSH Host Key 解密 (适用于系统级 secrets)
+    age.keyFile = "/var/lib/sops-nix/key.txt";            # 或者使用独立的 age key 文件
 
-    # 声明要解密的字段
+    # 声明 Secrets (敏感信息)
     secrets = {
-      # Root 密码
+      # Root 用户密码 Hash
       root_password = {
-        neededForUsers = true;
+        neededForUsers = true; # 指示该 secret 在用户创建/修改时需要
       };
-      
-      # Weel 用户密码
+
+      # 主用户密码 Hash
       user_password = {
         neededForUsers = true;
       };
     };
-  }  
+  };
 }

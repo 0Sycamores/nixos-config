@@ -276,7 +276,7 @@ install_nixos() {
     git add "hosts/${SELECTED_HOST}/hardware.nix"
 
     info "Starting NixOS installation (${SELECTED_HOST})..."
-    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake ".#${SELECTED_HOST}"
+    nixos-install --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
 
     step "=== Installation Complete! ==="
 }

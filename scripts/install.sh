@@ -258,7 +258,17 @@ restore_ssh_keys() {
         local field="$2"
         local out="$3"
         
-        if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${item}" -f "${field}" > "${out}"; then
+        # 使用增强的 sed 链处理多种格式异常：
+        # 1. s/\\n/\n/g:                      将 rbw 输出的字面量 "\n" 转换为实际换行
+        # 2. s/-----BEGIN [A-Z ]*-----/&\n/g: 确保 Header 之后强制换行 (修复单行粘连)
+        # 3. s/-----END [A-Z ]*-----/\n&/g:   确保 Footer 之前强制换行 (修复单行粘连)
+        # 4. /^$/d:                           删除因重复换行产生的空行
+        if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${item}" -f "${field}" \
+           | sed -e 's/\\n/\n/g' \
+                 -e 's/-----BEGIN [A-Z ]*-----/&\n/g' \
+                 -e 's/-----END [A-Z ]*-----/\n&/g' \
+           | sed '/^$/d' > "${out}"; then
+           
             if [[ ! -s "${out}" ]]; then
                 err "Error: File '${out}' is empty. Field '${field}' might be missing in Bitwarden item."
                 return 1
@@ -316,6 +326,17 @@ restore_ssh_keys() {
         chmod 600 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
         chmod 644 "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
         success "SSH keys fetched successfully."
+
+        info "--- Key Preview (Masked) ---"
+        info "Private Key:"
+        # 打印首尾行以验证格式是否正确（例如检查是否已正确换行）
+        head -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
+        echo "......"
+        tail -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
+        
+        info "Public Key:"
+        cat "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
+        info "----------------------------"
 
         # 复制密钥到当前 ISO 环境，以便 sops-nix 在构建时可以解密 secrets
         info "Copying keys to current environment for sops-nix decryption..."

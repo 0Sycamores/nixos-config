@@ -256,7 +256,8 @@ inject_hardware_config() {
 #######################################
 partition_and_format() {
     step "[6/8] Executing Disko partitioning..."
-    nix run .#disko -- --mode disko "./hosts/${SELECTED_HOST}/disko.nix"
+    # 使用上游 Disko (github:nix-community/disko) 避免本地废弃警告
+    nix run github:nix-community/disko -- --mode disko "./hosts/${SELECTED_HOST}/disko.nix"
 }
 
 #######################################

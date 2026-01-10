@@ -53,13 +53,13 @@
     device = "nodev";      # EFI 系统不需要指定设备
     useOSProber = true;    # 自动检测其他操作系统
     default = "saved";     # 记住上次选择的启动项
-    # CyberPunk 主题配置
-    theme = pkgs.fetchFromGitHub {
-        owner = "adnksharp";
-        repo = "CyberGRUB-2077";
-        rev = "6a5736ef44e4ede9bb403d78eafe7271dd2928db";
-        sha256 = "sha256-1f61nkh6a2vwdaglzsbhj0pm5nrfq7qb1vx8g8wg19s1sbdaq8j7";
-    };
+    # CyberPunk 主题配置 (临时禁用以排查 Nix Bug)
+    # theme = pkgs.fetchFromGitHub {
+    #     owner = "adnksharp";
+    #     repo = "CyberGRUB-2077";
+    #     rev = "6a5736ef44e4ede9bb403d78eafe7271dd2928db";
+    #     sha256 = "sha256-1f61nkh6a2vwdaglzsbhj0pm5nrfq7qb1vx8g8wg19s1sbdaq8j7";
+    # };
   };
 
   # 内核参数调优

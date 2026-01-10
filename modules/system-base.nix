@@ -53,7 +53,7 @@
     device = "nodev";      # EFI 系统不需要指定设备
     useOSProber = true;    # 自动检测其他操作系统
     default = "saved";     # 记住上次选择的启动项
-    # CyberPunk 主题配置 (临时禁用以排查 Nix Bug)
+    # # CyberPunk 主题配置
     # theme = pkgs.fetchFromGitHub {
     #     owner = "adnksharp";
     #     repo = "CyberGRUB-2077";

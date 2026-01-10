@@ -501,15 +501,60 @@ install_nixos() {
     step "Persisting configuration and keys to /mnt..."
     
     # 1. 复制 NixOS 配置
-    # 按照惯例，放在 /etc/nixos
-    if [[ -d "/mnt/etc/nixos" ]]; then
-        rm -rf /mnt/etc/nixos
+    # 最佳实践：将配置放在用户目录，并链接到 /etc/nixos
+    
+    # 解析目标用户名 (从 modules/vars.nix)
+    local target_user
+    target_user=$(grep 'username =' modules/vars.nix | cut -d'"' -f2)
+    
+    # 默认回退 (防止解析失败)
+    if [[ -z "${target_user}" ]]; then
+        err "Warning: Could not detect username from modules/vars.nix"
+        while true; do
+            read -r -p "Please enter the primary username for the new system: " target_user
+            # 验证用户名格式 (仅允许小写字母、数字、短横线，且不能以数字或短横线开头)
+            if [[ "${target_user}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+                break
+            else
+                err "Invalid username. Must start with a letter and contain only lowercase letters, digits, and hyphens."
+            fi
+        done
     fi
-    mkdir -p /mnt/etc/nixos
+    
+    local target_home="/mnt/home/${target_user}"
+    local target_config_dir="${target_home}/nixos-config"
+    
+    info "Persisting configuration to ${target_config_dir}..."
+    
+    # 确保目标用户主目录存在
+    mkdir -p "${target_home}"
+    
+    # 清理旧配置 (如果存在)
+    if [[ -d "${target_config_dir}" ]]; then
+        rm -rf "${target_config_dir}"
+    fi
+    mkdir -p "${target_config_dir}"
     
     # 复制当前目录所有内容（包含 .git，保留版本控制能力）
-    cp -r ./. /mnt/etc/nixos/
-    info "Configuration copied to /mnt/etc/nixos"
+    cp -r ./. "${target_config_dir}/"
+    
+    # 设置权限 (需要 chroot 因为用户仅存在于目标系统 /mnt/etc/passwd 中)
+    info "Setting ownership to ${target_user}..."
+    # 尝试使用 nixos-enter 在 chroot 环境中执行 chown
+    if ! nixos-enter --root /mnt -- -c "chown -R ${target_user}:users /home/${target_user}/nixos-config"; then
+         # 如果 nixos-enter 失败, 尝试直接使用常见 UID/GID 1000:100 (NixOS 第一个普通用户默认值)
+         info "nixos-enter failed, trying direct chown 1000:100..."
+         chown -R 1000:100 "${target_config_dir}"
+    fi
+    
+    # 创建 /etc/nixos 软链接以符合习惯
+    if [[ -d "/mnt/etc/nixos" && ! -L "/mnt/etc/nixos" ]]; then
+        rm -rf "/mnt/etc/nixos"
+    fi
+    
+    mkdir -p /mnt/etc
+    ln -sf "/home/${target_user}/nixos-config" "/mnt/etc/nixos"
+    info "Created symlink /etc/nixos -> ~/nixos-config"
 
     # 2. 复制 SSH 密钥
     # 确保新系统拥有身份密钥，以便在首次启动时解密 secrets (sops-nix)

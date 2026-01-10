@@ -24,7 +24,6 @@
 
     # Age 密钥相关配置
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ]; # 使用主机 SSH Host Key 解密 (适用于系统级 secrets)
-    age.keyFile = "/var/lib/sops-nix/key.txt";            # 或者使用独立的 age key 文件
 
     # 声明 Secrets (敏感信息)
     secrets = {

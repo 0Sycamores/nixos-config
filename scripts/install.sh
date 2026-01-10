@@ -334,6 +334,7 @@ restore_ssh_keys() {
         echo "......"
         tail -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
         
+        echo ""
         info "Public Key:"
         cat "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
         info "----------------------------"

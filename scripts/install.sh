@@ -354,8 +354,9 @@ restore_ssh_keys() {
         err "Aborting installation to prevent lockout."
         exit 1
     fi
+}
 
-    verify_sops_decryption() {
+verify_sops_decryption() {
     step "Verifying SOPS decryption..."
 
     # 1. 确定私钥位置 (脚本中恢复到了 /etc/ssh/ssh_host_ed25519_key)
@@ -530,6 +531,7 @@ main() {
     fetch_configuration
     select_host
     restore_ssh_keys
+    verify_sops_decryption
     select_disk
     inject_hardware_config
     partition_and_format

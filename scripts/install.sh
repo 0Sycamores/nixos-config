@@ -593,7 +593,7 @@ install_nixos() {
     cp -r ./. "${target_config_dir}/"
     
     # 设置所有权 (Ownership)
-    # 由于用户在宿主机环境中不存在 (只在 /mnt/etc/passwd 中)，我们直接使用 UID/GID 1000:100。
+    # 由于用户在宿主机环境中不存在 (只在 /mnt/etc/passwd 中)，直接使用 UID/GID 1000:100。
     # NixOS 默认创建的第一个普通用户 UID 为 1000，用户组 users GID 为 100。
     info "Setting ownership to ${target_user} (UID 1000)..."
     

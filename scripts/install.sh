@@ -26,9 +26,9 @@
 #      - 验证所选主机是否包含 `disko.nix` 分区配置，确保自动化分区的可行性。
 #
 #   4. 密钥管理与身份一致性 (Sops-Nix 集成)：
-#      - 集成 `rbw` (Bitwarden CLI) 从密码管理器安全恢复 SSH 主机密钥。
+#      - 集成 `rbw` (Bitwarden CLI) 从密码管理器安全恢复 Age 密钥 (用于 SOPS)。
 #      - 使用 `pinentry-curses` 处理密码输入，确保在纯终端环境下可用。
-#      - **关键安全检查**：在安装前使用恢复的密钥尝试解密 `secrets/secrets.yaml`。
+#      - **关键安全检查**：在安装前使用恢复的 Age 密钥尝试解密 `secrets/secrets.yaml`。
 #        这实现了 "Fail Fast" 原则：如果密钥错误或无法解密，立即中止安装，
 #        防止在安装完成才发现无法解密系统密码。
 #
@@ -48,12 +48,12 @@
 #        这是 Flake 时代的最佳实践，避免了 `/etc` 下 Git 仓库的 "Dubious Ownership" 权限问题。
 #      - 自动创建 `/etc/nixos` -> `~/.config/nixos` 的软链接以保持兼容性。
 #      - 自动修正配置文件权限为 UID 1000 (首个普通用户)，确保用户登录后可直接编辑。
-#      - 将恢复的 SSH 主机密钥持久化到 `/mnt/etc/ssh`，确保新系统首次启动即可解密 sops secrets。
+#      - 将恢复的 Age 密钥持久化到 `/mnt/var/lib/sops-nix/key.txt`，确保新系统首次启动即可解密 sops secrets。
 #
 # 前置条件 (Prerequisites):
 #   - 必须在 NixOS Live ISO 环境中运行。
 #   - 必须拥有有效的互联网连接。
-#   - 需要 Bitwarden 账户，且其中已存储对应主机的 SSH 密钥（字段：private_key, public_key）。
+#   - 需要 Bitwarden 账户，且其中已存储对应主机的 Age 密钥（字段：notes）。
 #   - 目标机器应支持 UEFI 启动（脚本默认配置为 UEFI/GPT）。
 #
 # 用法 (Usage):
@@ -287,52 +287,21 @@ select_host() {
 }
 
 #######################################
-# 步骤 4: 恢复 SSH 密钥。
-# 使用 rbw (Bitwarden CLI) 从密码管理器中获取 SSH 私钥和公钥。
-# 这是为了保持新系统的 SSH 身份与 secrets.yaml 加密时使用的公钥一致。
+# 步骤 4: 恢复密钥 (Age Key)。
+# 使用 rbw (Bitwarden CLI) 从密码管理器中获取 Age Key。
+# Age Key (存储在 notes 字段) 用于 SOPS 解密。
 #######################################
-restore_ssh_keys() {
-    step "[4/8] Restoring SSH Host Keys from Bitwarden..."
+restore_keys() {
+    step "[4/8] Restoring Keys from Bitwarden..."
 
     # 创建权限受限的临时目录 (0700) 存放密钥
     TEMP_KEY_DIR=$(mktemp -d)
     chmod 700 "$TEMP_KEY_DIR"
 
-    # 内部辅助函数：从 Bitwarden 获取单个字段并写入文件
-    # 参数: item_name (BW条目名), field_name (BW自定义字段名), output_file (输出路径)
-    _fetch_key_field() {
-        local item="$1"
-        local field="$2"
-        local out="$3"
-        
-        # 使用管道处理 rbw 输出，解决格式问题：
-        # 1. 将字面量 "\n" 转换为实际换行 (处理某些客户端复制粘贴导致的格式错误)。
-        # 2. 确保 PEM Header/Footer 独占一行。
-        # 3. 删除空行。
-        if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${item}" -f "${field}" \
-           | sed -e 's/\\n/\n/g' \
-                 -e 's/-----BEGIN [A-Z ]*-----/&\n/g' \
-                 -e 's/-----END [A-Z ]*-----/\n&/g' \
-           | sed '/^$/d' > "${out}"; then
-           
-            # 检查文件是否为空
-            if [[ ! -s "${out}" ]]; then
-                err "Error: File '${out}' is empty. Field '${field}' might be missing in Bitwarden item."
-                return 1
-            fi
-            return 0
-        else
-            err "Error: Failed to fetch '${field}' from Bitwarden."
-            return 1
-        fi
-    }
-
     # 检查 rbw 是否处于未锁定状态
-    # 引入 pinentry-curses 依赖，因为 rbw 需要它来提示输入主密码
     if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw unlocked 2>/dev/null; then
-        info "Please login to Bitwarden (rbw) to fetch the SSH key."
+        info "Please login to Bitwarden (rbw) to fetch keys."
 
-        # 交互式登录 Bitwarden
         read -r -p "Enter Bitwarden server URL (Leave empty for official server): " bw_url
         if [[ -z "${bw_url}" ]]; then
             bw_url="https://api.bitwarden.com"
@@ -342,7 +311,6 @@ restore_ssh_keys() {
 
         read -r -p "Enter your Bitwarden email: " bw_email
         
-        # 执行登录命令链
         info "Configuring rbw..."
         if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && rbw config set pinentry pinentry-curses && echo 'Please enter your master password to login:' && rbw login"; then
             err "Failed to login to Bitwarden. Please verify your credentials."
@@ -351,57 +319,37 @@ restore_ssh_keys() {
     fi
 
     # 提示用户输入 Bitwarden 中的 Item 名称
-    # 默认为当前选中的主机名，允许用户回车确认或输入新名称覆盖
-    read -r -p "Enter the Bitwarden item name for SSH key [default: ${SELECTED_HOST}]: " bw_item_name
+    read -r -p "Enter the Bitwarden item name for keys [default: ${SELECTED_HOST}]: " bw_item_name
     bw_item_name=${bw_item_name:-${SELECTED_HOST}}
 
-    # 开始获取密钥
-    info "Fetching key '${bw_item_name}'..."
+    info "Fetching keys from '${bw_item_name}'..."
 
-    local fetch_success=true
-
-    # 获取私钥 (字段名: private_key)
-    info "Fetching private key..."
-    if ! _fetch_key_field "${bw_item_name}" "private_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key"; then
-        fetch_success=false
-    fi
-
-    # 获取公钥 (字段名: public_key)
-    info "Fetching public key..."
-    if ! _fetch_key_field "${bw_item_name}" "public_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"; then
-        fetch_success=false
-    fi
-
-    if [[ "$fetch_success" == "true" ]]; then
-        # 设置密钥文件的正确权限 (私钥 600, 公钥 644)
-        chmod 600 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
-        chmod 644 "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
-        success "SSH keys fetched successfully."
-
-        # 打印密钥预览 (首尾行) 供用户视觉确认
-        info "--- Key Preview (Masked) ---"
-        info "Private Key:"
-        head -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
-        echo "......"
-        tail -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
-        
-        echo ""
-        info "Public Key:"
-        cat "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
-        info "----------------------------"
-
-        # 将密钥复制到当前 ISO 环境的 /etc/ssh
-        # 这一步对于下一步的 sops 解密验证至关重要
-        info "Copying keys to current environment for sops-nix decryption..."
-        mkdir -p /etc/ssh
-        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key" /etc/ssh/ssh_host_ed25519_key
-        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub" /etc/ssh/ssh_host_ed25519_key.pub
-        chmod 600 /etc/ssh/ssh_host_ed25519_key
+    # 获取 Age Secret Key (存储在 notes 字段)
+    info "Fetching Age Secret Key (from notes)..."
+    
+    # 直接使用 rbw 获取并写入文件
+    if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${bw_item_name}" -f notes > "${TEMP_KEY_DIR}/key.txt"; then
+        if [[ ! -s "${TEMP_KEY_DIR}/key.txt" ]]; then
+            err "Error: Retrieved key file is empty. Please check 'notes' field."
+            err "Aborting installation."
+            exit 1
+        fi
     else
-        err "Failed to fetch keys properly!"
-        err "Aborting installation to prevent lockout."
+        err "Error: Failed to fetch Age Key from Bitwarden."
+        err "Aborting installation."
         exit 1
     fi
+
+    # 设置权限
+    chmod 600 "${TEMP_KEY_DIR}/key.txt"
+    success "Age Key fetched successfully."
+
+    # 部署 Age Key 到当前环境 (用于 verify_sops_decryption)
+    # sops-nix 默认路径是 /var/lib/sops-nix/key.txt
+    info "Deploying Age Key to /var/lib/sops-nix/key.txt..."
+    mkdir -p /var/lib/sops-nix
+    cp "${TEMP_KEY_DIR}/key.txt" /var/lib/sops-nix/key.txt
+    chmod 600 /var/lib/sops-nix/key.txt
 }
 
 #######################################
@@ -413,31 +361,18 @@ restore_ssh_keys() {
 verify_sops_decryption() {
     step "Verifying SOPS decryption..."
 
-    # 1. 定位私钥 (我们刚刚复制到了这里)
-    local key_path="/etc/ssh/ssh_host_ed25519_key"
+    # 1. 定位 Age Key
+    local key_path="/var/lib/sops-nix/key.txt"
 
     if [[ ! -f "${key_path}" ]]; then
-        err "❌ Private key not found at ${key_path}"
+        err "❌ Age key not found at ${key_path}"
         return 1
     fi
 
-    # 2. 尝试解密 secrets.yaml
-    # 由于 sops-nix 使用 ssh-to-age 转换后的 age 密钥来加密，
-    # 我们需要模拟这个过程：先将 SSH 私钥转换为 Age 私钥。
+    info "Attempting to decrypt secrets.yaml using Age key..."
     
-    info "Converting SSH key to Age key for testing..."
-    
-    local age_key
-    # 使用 nix shell 运行 ssh-to-age 工具
-    if ! age_key=$(nix shell nixpkgs#ssh-to-age --command ssh-to-age -private-key -i "${key_path}"); then
-        err "❌ Failed to convert SSH key to Age key."
-        return 1
-    fi
-    
-    info "Attempting to decrypt secrets.yaml..."
-    
-    # 设置环境变量 SOPS_AGE_KEY，sops 工具会读取此变量作为解密密钥
-    export SOPS_AGE_KEY="${age_key}"
+    # 设置环境变量 SOPS_AGE_KEY_FILE
+    export SOPS_AGE_KEY_FILE="${key_path}"
     
     # 尝试解密，将输出重定向到 /dev/null，只关心退出状态码
     if nix shell nixpkgs#sops --command sops --decrypt "secrets/secrets.yaml" > /dev/null 2>&1; then
@@ -539,7 +474,7 @@ install_nixos() {
     if [ -n "$(git status --porcelain)" ]; then
         info "Committing changes to Git to ensure Flake visibility..."
         git config user.name "NixOS Installer"
-        git config user.email "installer@localhost"
+        git config user.email "installer@sycamore.icu"
         git commit -m "Auto-generated hardware config and disk layout"
     fi
 
@@ -606,31 +541,15 @@ install_nixos() {
     fi
     
 
-    # 2. 复制 SSH 密钥
+    # 2. 持久化密钥 (仅 Age Key)
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
-        # A. 系统级 (Host Key) - 用于 sops-nix 解密系统机密
-        mkdir -p /mnt/etc/ssh
-        cp "${TEMP_KEY_DIR}"/* /mnt/etc/ssh/
-        chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
-        chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
-        info "SSH keys copied to /mnt/etc/ssh (for SOPS)"
-
-        # B. 用户级 (User Key) - 复用为 GitHub Key，用于代码拉取
-        local user_ssh_dir="/mnt/home/${target_user}/.ssh"
-        mkdir -p "${user_ssh_dir}"
-        
-        # 复制同一份密钥到用户目录
-        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key" "${user_ssh_dir}/id_ed25519"
-        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub" "${user_ssh_dir}/id_ed25519.pub"
-        
-        # 修正权限和所有权 (关键步骤)
-        chmod 600 "${user_ssh_dir}/id_ed25519"
-        chmod 644 "${user_ssh_dir}/id_ed25519.pub"
-        chown -R 1000:100 "${user_ssh_dir}"
-        
-        info "SSH keys mirrored to ${user_ssh_dir} (for GitHub)"
+        # A. Age Key (用于 SOPS)
+        info "Persisting Age Key to /mnt/var/lib/sops-nix/key.txt..."
+        mkdir -p /mnt/var/lib/sops-nix
+        cp "${TEMP_KEY_DIR}/key.txt" /mnt/var/lib/sops-nix/key.txt
+        chmod 600 /mnt/var/lib/sops-nix/key.txt
     else
-        err "Warning: Temporary keys not found, SSH keys might not be persisted!"
+        err "Warning: Temporary keys not found, keys might not be persisted!"
     fi
 
     step "=== Installation Complete! ==="
@@ -649,7 +568,7 @@ main() {
     prepare_environment
     fetch_configuration
     select_host
-    restore_ssh_keys
+    restore_keys
     verify_sops_decryption
     select_disk
     inject_hardware_config

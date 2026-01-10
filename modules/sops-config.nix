@@ -23,7 +23,8 @@
     defaultSopsFormat = "yaml";
 
     # Age 密钥相关配置
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ]; # 使用主机 SSH Host Key 解密 (适用于系统级 secrets)
+    age.keyFile = "/var/lib/sops-nix/key.txt";
+    age.sshKeyPaths = [ ]; # 设置空的 SSH KEY 路径，强制使用 Age Key
 
     # 声明 Secrets (敏感信息)
     secrets = {

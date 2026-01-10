@@ -1,8 +1,9 @@
 # .sops.yaml
 # echo "PUBLIC_KEY" | nix shell nixpkgs#ssh-to-age --command ssh-to-age
 keys:
-  - &admin    age1nnfyrufg4wqct5ejtzhqngh80sg4skdu9srt9zfd8d5a7s95s5as5tecug 
-  - &iroha    age1x8ncu43ylh82l7qaw889exxzq794pte4hlk0s4a4trenv2td7yhqzratqw
+  - &admin    age1jg3c7up285wumas8tm5l8utjv72u3pktw5eaz6flw0zxnsymecgqygtuvu 
+  - &iroha    age19tgcepp6md56qxcc7an8g608eun6qnhv3y9gv9kghg8uym050umqp4zu9c
+  - &yukino   age1tfakzrtjwgd52qv57ezm648e8tmunxtw6v0vmltnx5jn53u37fkqray347
 
 creation_rules:
   # 只要是 secrets 目录下的文件，都同时加上这两把锁
@@ -11,3 +12,4 @@ creation_rules:
       - age:
           - *admin
           - *iroha
+          - *yukino

@@ -45,6 +45,11 @@
   # 设置主机名
   networking.hostName = "yukino";
 
+  # 防火墙配置
+  # OpenSSH (22) 默认会开启防火墙，但在此处显式声明以便管理
+  networking.firewall.allowedTCPPorts = [ 22 ];
+  # networking.firewall.allowedUDPPorts = [ ... ];
+
   # 确保特定用户目录存在 (Downloads, Videos, Games)
   # 权限: 0755, 用户: vars.username, 组: users
   # 注意: 使用 "d" 类型，如果目录不存在则创建

@@ -129,6 +129,14 @@
     enable = true;
     settings.user.name = vars.userFullName;
     settings.user.email = vars.userEmail;
+    # 自动将 HTTPS 协议的 GitHub 仓库地址转换为 SSH 协议
+    extraConfig = {
+      url = {
+        "git@github.com:" = {
+          insteadOf = "https://github.com/";
+        };
+      };
+    };
   };
 
   # =================================================================================

@@ -605,24 +605,6 @@ install_nixos() {
         chown 1000:100 "${target_home}/.config"
     fi
     
-    # 创建传统的 /etc/nixos 软链接
-    # 这样 `nixos-rebuild switch` (不带参数) 仍然可以工作，且符合用户习惯
-    if [[ -d "/mnt/etc/nixos" && ! -L "/mnt/etc/nixos" ]]; then
-        rm -rf "/mnt/etc/nixos"
-    fi
-    
-    mkdir -p /mnt/etc
-    ln -sf "/home/${target_user}/.config/nixos" "/mnt/etc/nixos"
-    info "Created symlink /etc/nixos -> ~/.config/nixos"
-
-    # [新增] 自动将 Git Remote 转换为 SSH 格式
-    # 将 https://github.com/user/repo 替换为 git@github.com:user/repo
-    # 这样用户进入系统后可以直接 git push 而无需输入密码
-    local git_config="${target_config_dir}/.git/config"
-    if [[ -f "${git_config}" ]]; then
-        sed -i 's|https://github.com/|git@github.com:|' "${git_config}"
-        info "Git remote updated to SSH protocol (for passwordless push)."
-    fi
 
     # 2. 复制 SSH 密钥
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then

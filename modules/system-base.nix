@@ -135,6 +135,12 @@
   # 必须在系统级启用 Fish，才能将其用作登录 Shell
   programs.fish.enable = true;
 
+  # 确保 /etc/nixos 指向用户的 Flake 配置目录
+  # L+ 表示如果链接不存在则创建，如果存在且指向不同则强制重建
+  systemd.tmpfiles.rules = [
+    "L+ /etc/nixos - - - - /home/${vars.username}/.config/nixos"
+  ];
+
   # 系统级基础软件包
   environment.systemPackages = with pkgs; [
     wget

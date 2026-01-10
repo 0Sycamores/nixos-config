@@ -1,4 +1,5 @@
 # .sops.yaml
+# echo "PUBLIC_KEY" | nix shell nixpkgs#ssh-to-age --command ssh-to-age
 keys:
   - &admin    age1nnfyrufg4wqct5ejtzhqngh80sg4skdu9srt9zfd8d5a7s95s5as5tecug 
   - &iroha    age1x8ncu43ylh82l7qaw889exxzq794pte4hlk0s4a4trenv2td7yhqzratqw

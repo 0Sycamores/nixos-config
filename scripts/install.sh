@@ -481,6 +481,16 @@ install_nixos() {
     # 这一步对于基于 Git 的 Flake 至关重要，否则未追踪的文件可能被忽略
     git add .
 
+    # 提交修改，确保 Flake 能读取到新文件 (hardware.nix)
+    # 当 Flake 源为 Git 仓库时，未提交的文件(即使已暂存)可能无法被 Nix 识别，
+    # 导致 "No such file or directory" 错误。
+    if [ -n "$(git status --porcelain)" ]; then
+        info "Committing changes to Git to ensure Flake visibility..."
+        git config user.name "NixOS Installer"
+        git config user.email "installer@localhost"
+        git commit -m "Auto-generated hardware config and disk layout"
+    fi
+
     # 将配置复制到新系统
     # 按照惯例，放在 /etc/nixos 比较合适，因为这是 NixOS 的默认配置位置
     step "Persisting configuration and keys to /mnt..."

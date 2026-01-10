@@ -32,5 +32,7 @@
   # 用于远程免密登录
   authorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIc1e41tDeHN7Zq3lX5pp8aqbJm9vHseHNPOGKsFy0/9 sycamore@sycamore.icu"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICmksabsMc0dSSW+doI2Or65dYAYfp647kjItK/jypa1 sycamore@iroha"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN7FVcpD+0mlASXx7CYj3arh6yc0rMhu2iBcMYTEu325 sycamore@yukino"
   ];
 }

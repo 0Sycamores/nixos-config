@@ -12,7 +12,7 @@
   注意:
   加密文件 (secrets.yaml) 应提交到 Git，但 key 文件绝对不能提交。
 */
-{ config, ... }:
+{ config, vars, ... }:
 
 {
   sops = {
@@ -36,6 +36,16 @@
       # 主用户密码 Hash
       user_password = {
         neededForUsers = true;
+      };
+
+      # SSH 私钥 (Yukino)
+      ssh_key_yukino = {
+        owner = config.users.users.${config.vars.username}.name;
+      };
+
+      # SSH 私钥 (Iroha)
+      ssh_key_iroha = {
+        owner = config.users.users.${config.vars.username}.name;
       };
     };
   };

@@ -15,7 +15,7 @@
   使用方法:
   被具体用户的 home.nix 导入 (e.g. home/yukino.nix).
 */
-{ config, pkgs, vars, ... }:
+{ config, pkgs, vars, osConfig, ... }:
 
 {
   # =================================================================================
@@ -111,11 +111,14 @@
 
   programs.ssh = {
     enable = true;
+    enableDefaultConfig = false;
     matchBlocks = {
       "github.com" = {
+        addKeysToAgent = "yes";
         hostname = "github.com";
-        user = "git";
-        identityFile = "~/.ssh/id_ed25519";
+        user = "git"; # GitHub SSH 强制要求使用 git 用户，身份识别依靠密钥
+        # 动态指向由 SOPS 部署的密钥: /run/secrets/ssh_key_yukino 或 /run/secrets/ssh_key_iroha
+        identityFile = "/run/secrets/ssh_key_${osConfig.networking.hostName}";
       };
     };
   };
@@ -127,10 +130,13 @@
   # Git 全局配置
   programs.git = {
     enable = true;
-    settings.user.name = vars.userFullName;
-    settings.user.email = vars.userEmail;
-    # 自动将 HTTPS 协议的 GitHub 仓库地址转换为 SSH 协议
-    extraConfig = {
+    settings = {
+      user = {
+        name  = vars.userFullName;
+        email = vars.userEmail;
+      };
+      # 自动将 HTTPS 协议的 GitHub 仓库地址转换为 SSH 协议
+      init.defaultBranch = "main";
       url = {
         "git@github.com:" = {
           insteadOf = "https://github.com/";

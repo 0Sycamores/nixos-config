@@ -40,12 +40,12 @@
 
       # SSH 私钥 (Yukino)
       ssh_key_yukino = {
-        owner = config.users.users.${config.vars.username}.name;
+        owner = config.users.users.${vars.username}.name;
       };
 
       # SSH 私钥 (Iroha)
       ssh_key_iroha = {
-        owner = config.users.users.${config.vars.username}.name;
+        owner = config.users.users.${vars.username}.name;
       };
     };
   };

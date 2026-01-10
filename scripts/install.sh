@@ -616,14 +616,28 @@ install_nixos() {
     info "Created symlink /etc/nixos -> ~/.config/nixos"
 
     # 2. 复制 SSH 密钥
-    # 将恢复的密钥持久化到新系统的 /etc/ssh
-    # 确保新系统启动时，sops-nix 能读取该密钥来解密 secrets (如用户密码)
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
+        # A. 系统级 (Host Key) - 用于 sops-nix 解密系统机密
         mkdir -p /mnt/etc/ssh
         cp "${TEMP_KEY_DIR}"/* /mnt/etc/ssh/
         chmod 600 /mnt/etc/ssh/ssh_host_ed25519_key
         chmod 644 /mnt/etc/ssh/ssh_host_ed25519_key.pub
-        info "SSH keys copied to /mnt/etc/ssh"
+        info "SSH keys copied to /mnt/etc/ssh (for SOPS)"
+
+        # B. 用户级 (User Key) - 复用为 GitHub Key，用于代码拉取
+        local user_ssh_dir="/mnt/home/${target_user}/.ssh"
+        mkdir -p "${user_ssh_dir}"
+        
+        # 复制同一份密钥到用户目录
+        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key" "${user_ssh_dir}/id_ed25519"
+        cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub" "${user_ssh_dir}/id_ed25519.pub"
+        
+        # 修正权限和所有权 (关键步骤)
+        chmod 600 "${user_ssh_dir}/id_ed25519"
+        chmod 644 "${user_ssh_dir}/id_ed25519.pub"
+        chown -R 1000:100 "${user_ssh_dir}"
+        
+        info "SSH keys mirrored to ${user_ssh_dir} (for GitHub)"
     else
         err "Warning: Temporary keys not found, SSH keys might not be persisted!"
     fi

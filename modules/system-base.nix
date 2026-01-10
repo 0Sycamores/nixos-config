@@ -100,7 +100,10 @@
   # OpenSSH 服务
   services.openssh = {
     enable = true;
-    settings.PermitRootLogin = "no"; # 禁止 Root 远程登录
+    settings = {
+      PermitRootLogin = "no";         # 禁止 Root 远程登录
+      PasswordAuthentication = false; # 禁止密码验证 (强制使用 SSH Key)
+    };
   };
 
   # =================================================================================
@@ -122,6 +125,7 @@
     extraGroups = [ "networkmanager" "wheel" ];
     hashedPasswordFile = config.sops.secrets.user_password.path;
     shell = pkgs.fish; # 使用 Fish Shell
+    openssh.authorizedKeys.keys = vars.authorizedKeys; # 配置 SSH 公钥
   };
 
   # =================================================================================

@@ -27,4 +27,10 @@
 
   # 系统时区设置
   timeZone = "Asia/Shanghai";
+
+  # SSH 公钥列表 (Authorized Keys)
+  # 用于远程免密登录
+  authorizedKeys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIc1e41tDeHN7Zq3lX5pp8aqbJm9vHseHNPOGKsFy0/9 sycamore@sycamore.icu"
+  ];
 }

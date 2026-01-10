@@ -491,23 +491,28 @@ install_nixos() {
         git commit -m "Auto-generated hardware config and disk layout"
     fi
 
-    # 将配置复制到新系统
-    # 按照惯例，放在 /etc/nixos 比较合适，因为这是 NixOS 的默认配置位置
+    info "Starting NixOS installation (${SELECTED_HOST})..."
+    # 使用当前目录 (.) 作为 Flake 源进行安装
+    # 这样可以避免在 /mnt 中处理 Git 仓库可能遇到的文件系统或权限问题
+    # 注意: substituters 已在 flake 配置中定义，此处无需重复指定
+    nixos-install --no-root-passwd --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
+
+    # 安装完成后，将配置和密钥持久化到新系统
     step "Persisting configuration and keys to /mnt..."
     
     # 1. 复制 NixOS 配置
-    # 先清理目标目录，防止残留文件干扰
+    # 按照惯例，放在 /etc/nixos
     if [[ -d "/mnt/etc/nixos" ]]; then
         rm -rf /mnt/etc/nixos
     fi
     mkdir -p /mnt/etc/nixos
     
     # 复制当前目录所有内容（包含 .git，保留版本控制能力）
-    # 使用 ./. 确保隐藏文件也被复制
     cp -r ./. /mnt/etc/nixos/
     info "Configuration copied to /mnt/etc/nixos"
 
     # 2. 复制 SSH 密钥
+    # 确保新系统拥有身份密钥，以便在首次启动时解密 secrets (sops-nix)
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
         mkdir -p /mnt/etc/ssh
         cp "${TEMP_KEY_DIR}"/* /mnt/etc/ssh/
@@ -517,12 +522,6 @@ install_nixos() {
     else
         err "Warning: Temporary keys not found, SSH keys might not be persisted!"
     fi
-
-    info "Starting NixOS installation (${SELECTED_HOST})..."
-    # 注意：这里使用 --flake /mnt/etc/nixos#... 来指向已经复制进去的配置
-    # 这样可以确保安装的是最终持久化在磁盘上的那个版本
-    # 使用 --no-root-passwd 因为我们通常在配置中声明了用户密码或使用 SSH 密钥
-    nixos-install --no-root-passwd --option substituters "https://mirrors.ustc.edu.cn/nix-channels/store" --root /mnt --flake "/mnt/etc/nixos#${SELECTED_HOST}" --show-trace
 
     step "=== Installation Complete! ==="
 }

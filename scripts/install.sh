@@ -297,7 +297,10 @@ restore_ssh_keys() {
         # 进入带有 rbw 和 pinentry-curses 的子 shell 让用户交互式登录
         # 并显式配置 pinentry 程序
         info "Configuring rbw..."
-        nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && rbw config set pinentry pinentry-curses && echo 'Please enter your master password to login:' && rbw login"
+        if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && rbw config set pinentry pinentry-curses && echo 'Please enter your master password to login:' && rbw login"; then
+            err "Failed to login to Bitwarden. Please verify your credentials."
+            exit 1
+        fi
     fi
 
     # 提示输入 Bitwarden 中的密钥项名称
@@ -350,6 +353,55 @@ restore_ssh_keys() {
         err "Failed to fetch keys properly!"
         err "Aborting installation to prevent lockout."
         exit 1
+    fi
+
+    verify_sops_decryption() {
+    step "Verifying SOPS decryption..."
+
+    # 1. 确定私钥位置 (脚本中恢复到了 /etc/ssh/ssh_host_ed25519_key)
+    local key_path="/etc/ssh/ssh_host_ed25519_key"
+
+    if [[ ! -f "${key_path}" ]]; then
+        err "❌ Private key not found at ${key_path}"
+        return 1
+    fi
+
+    # 2. 尝试解密 secrets.yaml
+    # SOPS 默认会根据环境变量或配置文件寻找密钥。
+    # 这里我们需要告诉 sops 使用 SSH key 转换成的 age key。
+    # sops-nix 的机制是把 ssh key 转换成 age key。
+    # 我们可以利用 sops 的 --keyservice 选项或者设置 SOPS_AGE_KEY_FILE 环境变量。
+    
+    # 但更简单的方法是直接利用 ssh-to-age 工具（如果环境里有）或者让 sops 自动识别 SSH 密钥。
+    # 实际上，sops 原生并不直接支持读取 ssh 私钥文件作为 age key（这是 sops-nix 做的一层桥接）。
+    # sops-nix 在激活时会运行一个脚本把 ssh key 转换成 age key 放在 /run/secrets.d/age-keys.txt (类似路径)。
+    
+    # 在安装脚本这种临时环境中，最直接的验证方法是：
+    # 使用 ssh-to-age 将 SSH 私钥转换为 Age 私钥，然后尝试解密。
+    
+    info "Converting SSH key to Age key for testing..."
+    
+    # 获取转换后的 Age 私钥
+    local age_key
+    if ! age_key=$(nix shell nixpkgs#ssh-to-age --command ssh-to-age -private-key -i "${key_path}"); then
+        err "❌ Failed to convert SSH key to Age key."
+        return 1
+    fi
+    
+    info "Attempting to decrypt secrets.yaml..."
+    
+    # 设置环境变量供 sops 使用
+    export SOPS_AGE_KEY="${age_key}"
+    
+    # 尝试解密 (只输出到 /dev/null，不展示内容，只看退出码)
+    if nix shell nixpkgs#sops --command sops --decrypt "secrets/secrets.yaml" > /dev/null 2>&1; then
+        success "✅ SOPS decryption verified successfully!"
+        return 0
+    else
+        err "❌ SOPS decryption FAILED!"
+        err "   The restored SSH key does not match the lock on secrets.yaml."
+        err "   Please check if the host key in Bitwarden matches .sops.yaml."
+        return 1
     fi
 }
 

@@ -5,24 +5,59 @@
 # ======================================================================================
 #
 # 描述 (Description):
-#   此脚本用于在裸机环境下自动化安装 NixOS。它设计用于官方 NixOS ISO 环境。
-#   主要功能包括：
-#   1. 环境准备：检测网络、配置代理、启用 Flakes。
-#   2. 配置拉取：自动从 GitHub 克隆最新的 NixOS 配置仓库。
-#   3. 主机选择：动态解析 `hosts/` 目录，允许用户选择目标主机配置。
-#   4. 密钥恢复：集成 Bitwarden CLI (rbw)，安全恢复 SSH 主机密钥以保持身份一致性。
-#   5. 磁盘管理：交互式选择目标磁盘，并发出数据清除警告。
-#   6. 自动分区：使用 Disko 根据配置文件自动执行磁盘分区和格式化。
-#   7. 系统安装：生成硬件配置，持久化密钥和配置，并执行 nixos-install。
+#   此脚本专为在裸机环境下自动化安装 NixOS 而设计。它假设运行环境为官方 NixOS ISO。
+#   该脚本通过一系列交互式步骤，引导用户完成从环境准备、配置下载、密钥恢复、
+#   磁盘分区到最终系统安装的全过程。
+#
+#   核心功能与设计理念：
+#   1. 环境自动检测与准备：
+#      - 验证运行环境是否为 NixOS。
+#      - 检测互联网连接（通过 ping baidu.com），因为 Nix 安装强依赖网络。
+#      - 提供交互式 HTTP 代理配置，以加速国内环境下的 GitHub 访问。
+#      - 自动配置并启用 Nix Flakes 实验特性，配置国内镜像源（USTC）以加速构建。
+#
+#   2. 配置即代码 (IaC) 拉取：
+#      - 自动从指定的 GitHub 仓库克隆最新的 NixOS Flake 配置。
+#      - 使用临时目录 (/tmp/nixos-install) 保证安装环境的清洁。
+#
+#   3. 动态主机选择：
+#      - 自动扫描仓库中的 `hosts/` 目录，识别可用的主机配置。
+#      - 提供交互式菜单供用户选择目标主机（如 iroha, yukino 等）。
+#      - 验证所选主机是否包含 `disko.nix` 分区配置，确保自动化分区的可行性。
+#
+#   4. 密钥管理与身份一致性 (Sops-Nix 集成)：
+#      - 集成 `rbw` (Bitwarden CLI) 从密码管理器安全恢复 SSH 主机密钥。
+#      - 使用 `pinentry-curses` 处理密码输入，确保在纯终端环境下可用。
+#      - **关键安全检查**：在安装前使用恢复的密钥尝试解密 `secrets/secrets.yaml`。
+#        这实现了 "Fail Fast" 原则：如果密钥错误或无法解密，立即中止安装，
+#        防止在安装完成才发现无法解密系统密码。
+#
+#   5. 磁盘管理与 Disko 集成：
+#      - 列出系统物理磁盘，提示用户选择安装目标。
+#      - 智能检测目标磁盘是否含有 Windows (NTFS) 分区，并发出高亮警告。
+#      - 动态修改 `disko.nix` 配置，将目标设备路径注入到配置中。
+#      - 使用 `nix run .#disko` 执行声明式分区、格式化和挂载，无需手动编写 fstab。
+#
+#   6. 幂等性与系统安装：
+#      - 自动生成 `hardware.nix` 并纳入 Git 版本控制。
+#      - 强制执行 Git 提交，因为 Flake 只能识别已追踪（Tracked）的文件。
+#      - 使用 `nixos-install` 从当前目录（Flake）构建并安装系统。
+#
+#   7. 配置持久化与最佳实践：
+#      - 将完整的 Flake 配置复制到新系统的用户目录 (`~/.config/nixos`)，而非 `/etc/nixos`。
+#        这是 Flake 时代的最佳实践，避免了 `/etc` 下 Git 仓库的 "Dubious Ownership" 权限问题。
+#      - 自动创建 `/etc/nixos` -> `~/.config/nixos` 的软链接以保持兼容性。
+#      - 自动修正配置文件权限为 UID 1000 (首个普通用户)，确保用户登录后可直接编辑。
+#      - 将恢复的 SSH 主机密钥持久化到 `/mnt/etc/ssh`，确保新系统首次启动即可解密 sops secrets。
 #
 # 前置条件 (Prerequisites):
 #   - 必须在 NixOS Live ISO 环境中运行。
-#   - 必须能连通Github。
-#   - 需要 Bitwarden 账户和已存储的 SSH 主机密钥条目。
-#   - 目标机器应支持 UEFI 启动（推荐）。
+#   - 必须拥有有效的互联网连接。
+#   - 需要 Bitwarden 账户，且其中已存储对应主机的 SSH 密钥（字段：private_key, public_key）。
+#   - 目标机器应支持 UEFI 启动（脚本默认配置为 UEFI/GPT）。
 #
 # 用法 (Usage):
-#   通常通过 curl 或 wget 直接执行：
+#   通常通过 curl 或 wget 直接从 GitHub 拉取并执行：
 #   curl -L https://raw.githubusercontent.com/0Sycamores/nixos-config/main/scripts/install.sh | bash
 #   或
 #   bash <(curl -fsSL nixos.sycamore.icu/install)
@@ -34,77 +69,82 @@
 set -e
 
 # --- 配置 ---
+# 远程配置仓库地址
 readonly REPO_URL="https://github.com/0Sycamores/nixos-config"
+# 安装过程中的临时工作目录
 readonly TARGET_DIR="/tmp/nixos-install"
 
-# --- 颜色 ---
+# --- 颜色定义 ---
+# 用于美化终端输出
 readonly GREEN=$'\033[0;32m'
 readonly RED=$'\033[0;31m'
-readonly NC=$'\033[0m' # No Color
+readonly NC=$'\033[0m' # No Color (重置颜色)
 
-# --- 全局状态 ---
-# 这些变量维护跨函数的状态
-SELECTED_HOST=""
-TARGET_DISK=""
-TEMP_KEY_DIR=""
+# --- 全局状态变量 ---
+# 这些变量在不同函数间传递状态
+SELECTED_HOST=""  # 用户选择的目标主机名 (例如: iroha)
+TARGET_DISK=""    # 用户选择的目标安装磁盘 (例如: /dev/sda)
+TEMP_KEY_DIR=""   # 存放从 Bitwarden 恢复的临时密钥的目录路径
 
 # --- 日志辅助函数 ---
 
 #######################################
-# 打印标准信息到 stdout。
+# 打印普通信息到标准输出 (stdout)。
 # 参数:
-#   要打印的消息。
+#   $*: 要打印的消息内容。
 #######################################
 info() {
     printf "%s\n" "$*"
 }
 
 #######################################
-# 打印绿色成功消息。
+# 打印绿色高亮的成功消息。
 # 参数:
-#   要打印的消息。
+#   $*: 要打印的消息内容。
 #######################################
 success() {
     printf "${GREEN}%s${NC}\n" "$*"
 }
 
 #######################################
-# 打印红色错误消息到 stderr。
+# 打印红色高亮的错误消息到标准错误 (stderr)。
 # 参数:
-#   要打印的消息。
+#   $*: 要打印的消息内容。
 #######################################
 err() {
     printf "${RED}%s${NC}\n" "$*" >&2
 }
 
 #######################################
-# 打印带前置换行符的绿色部分标题（步骤）。
+# 打印带有前置换行的绿色步骤标题。
+# 用于区分安装过程的不同阶段。
 # 参数:
-#   要打印的消息。
+#   $*: 步骤描述。
 #######################################
 step() {
     printf "\n${GREEN}%s${NC}\n" "$*"
 }
 
 #######################################
-# 在退出或出错时运行的清理函数。
-# 局部变量:
-#   exit_code: 脚本的退出代码。
+# 清理函数 (Cleanup)。
+# 注册在脚本退出 (EXIT) 或被中断 (INT, TERM) 时自动执行。
+# 负责清理临时文件、卸载挂载点（如果出错）并报告最终状态。
 #######################################
 cleanup() {
     local exit_code=$?
 
-    # 安全清理临时密钥目录
+    # 安全清理临时密钥目录，防止私钥泄露
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
         rm -rf "${TEMP_KEY_DIR}"
     fi
 
+    # 如果脚本非正常退出 (exit_code != 0)
     if [[ "${exit_code}" -ne 0 ]]; then
         printf "\n" >&2
         err "❌ Script exited with error code ${exit_code}."
         err "Cleaning up..."
 
-        # 检查 /mnt 是否已挂载
+        # 检查 /mnt 是否仍处于挂载状态，提示用户手动处理
         if grep -qs "/mnt" /proc/mounts; then
             info "⚠️  The system is still mounted at /mnt for debugging."
             info "   You can unmount it manually by running: umount -R /mnt"
@@ -115,23 +155,22 @@ cleanup() {
 }
 
 #######################################
-# 步骤 1: 准备环境。
-# 检查是否在 NixOS 中运行，检查互联网连接，
-# 配置可选代理，并启用 Nix flakes。
+# 步骤 1: 准备安装环境。
+# 1. 验证运行环境是否为 NixOS。
+# 2. 检查互联网连接。
+# 3. 提供交互式代理配置。
+# 4. 配置 Nix 以启用 Flakes 和国内镜像源。
 #######################################
 prepare_environment() {
     step "[1/8] Preparing environment..."
 
-    # 检查是否在 NixOS 环境中 (基本检查 /etc/NIXOS)
+    # 检查是否在 NixOS 环境中 (通过检测 /etc/NIXOS 标志文件)
     if [[ ! -e /etc/NIXOS ]]; then
-        err "Warning: It seems you are not in the NixOS ISO environment. This script is intended for bare metal installation."
-        read -r -p "Confirm to continue? (yes/no): " confirm
-        if [[ "${confirm}" != "yes" ]]; then
-            exit 1
-        fi
+        err "Error: This script must be run within a NixOS environment."
+        exit 1
     fi
 
-    # 检查网络连接
+    # 检查网络连接 (Ping 百度)
     if ping -c 1 baidu.com &> /dev/null; then
         info "Internet connection is normal."
     else
@@ -139,13 +178,13 @@ prepare_environment() {
         exit 1
     fi
 
-    # 配置 HTTP 代理
+    # 配置 HTTP 代理 (可选)
     printf "\n"
     info "Do you need to configure an HTTP proxy to speed up GitHub access?"
     read -r -p "Please enter proxy address (e.g. 192.168.1.100:7890 or http://192.168.1.100:7890, leave empty to skip): " proxy_addr
 
     if [[ -n "${proxy_addr}" ]]; then
-        # 如果缺少 http:// 则自动添加
+        # 自动补全 http:// 前缀
         if [[ "${proxy_addr}" != http://* ]] && [[ "${proxy_addr}" != https://* ]]; then
             proxy_addr="http://${proxy_addr}"
         fi
@@ -154,6 +193,7 @@ prepare_environment() {
         info "Proxy set: ${proxy_addr}"
     fi
 
+    # 测试 GitHub 连通性
     info "Testing GitHub connectivity..."
     if curl -s --head --connect-timeout 5 https://github.com > /dev/null; then
         success "GitHub connection successful!"
@@ -165,7 +205,8 @@ prepare_environment() {
         fi
     fi
 
-    # 启用 Flakes
+    # 启用 Flakes 和配置镜像源
+    # 写入 ~/.config/nix/nix.conf
     mkdir -p ~/.config/nix
     cat > ~/.config/nix/nix.conf << EOF
 experimental-features = nix-command flakes
@@ -175,28 +216,31 @@ EOF
 
 #######################################
 # 步骤 2: 拉取配置。
-# 将 Git 仓库克隆到目标目录。
+# 从 GitHub 克隆 NixOS 配置仓库到本地临时目录。
 #######################################
 fetch_configuration() {
     step "[2/8] Fetching configuration..."
 
     info "Preparing to clone configuration from GitHub..."
+    # 清理旧的临时目录 (如果存在)
     if [[ -d "${TARGET_DIR}" ]]; then
         info "Cleaning up old directory ${TARGET_DIR} ..."
         rm -rf "${TARGET_DIR}"
     fi
 
-    # 使用 nix shell 中的 git 克隆，确保 git 可用
+    # 使用 `nix shell nixpkgs#git` 临时环境执行 git clone，确保即使 ISO 精简版未预装 git 也能工作
     nix shell nixpkgs#git --command git clone "${REPO_URL}" "${TARGET_DIR}"
     
-    # 切换到下载的仓库目录以进行后续操作
+    # 切换工作目录到下载的仓库
     cd "${TARGET_DIR}" || exit 1
 }
 
 #######################################
 # 步骤 3: 选择目标主机。
-# 列出 'hosts/' 目录下的可用主机并提示用户选择。
-# 设置全局 SELECTED_HOST。
+# 1. 扫描 `hosts/` 目录。
+# 2. 展示可用主机列表。
+# 3. 提示用户输入选择。
+# 4. 验证所选主机是否包含必要的 `disko.nix`。
 #######################################
 select_host() {
     step "[3/8] Select target host"
@@ -207,20 +251,22 @@ select_host() {
         exit 1
     fi
 
-    # 将 hosts 读取到数组中
+    # 读取 hosts 目录下的子目录名作为主机列表
     local hosts=($(ls hosts))
     local i=1
     local host
 
+    # 打印菜单
     for host in "${hosts[@]}"; do
         info "$i) $host"
         ((i++))
     done
 
+    # 循环等待用户有效输入
     while true; do
         read -r -p "Please enter the number to select a host: " host_index
         
-        # 验证输入
+        # 验证输入是否为有效的数字索引
         if [[ "${host_index}" =~ ^[0-9]+$ ]] && [[ "${host_index}" -ge 1 ]] && [[ "${host_index}" -le "${#hosts[@]}" ]]; then
             break
         else
@@ -228,11 +274,11 @@ select_host() {
         fi
     done
 
-    # 设置全局选中主机
+    # 设置全局变量 SELECTED_HOST
     SELECTED_HOST="${hosts[$((host_index-1))]}"
     info "Selected host: ${GREEN}${SELECTED_HOST}${NC}"
 
-    # 检查 disko 配置是否存在
+    # 预检查：确保该主机定义了 disko 分区配置
     if [[ ! -f "hosts/${SELECTED_HOST}/disko.nix" ]]; then
         err "Error: hosts/${SELECTED_HOST}/disko.nix does not exist."
         info "This host might not support automatic partitioning installation, or configuration is incomplete."
@@ -242,33 +288,34 @@ select_host() {
 
 #######################################
 # 步骤 4: 恢复 SSH 密钥。
-# 使用 rbw (Bitwarden CLI) 获取 SSH 主机密钥以保留身份。
+# 使用 rbw (Bitwarden CLI) 从密码管理器中获取 SSH 私钥和公钥。
+# 这是为了保持新系统的 SSH 身份与 secrets.yaml 加密时使用的公钥一致。
 #######################################
 restore_ssh_keys() {
     step "[4/8] Restoring SSH Host Keys from Bitwarden..."
 
-    # 使用 mktemp 创建安全的临时目录
+    # 创建权限受限的临时目录 (0700) 存放密钥
     TEMP_KEY_DIR=$(mktemp -d)
     chmod 700 "$TEMP_KEY_DIR"
 
-    # 内部辅助函数：获取单个密钥字段
-    # 参数: item_name, field_name, output_file
+    # 内部辅助函数：从 Bitwarden 获取单个字段并写入文件
+    # 参数: item_name (BW条目名), field_name (BW自定义字段名), output_file (输出路径)
     _fetch_key_field() {
         local item="$1"
         local field="$2"
         local out="$3"
         
-        # 使用增强的 sed 链处理多种格式异常：
-        # 1. s/\\n/\n/g:                      将 rbw 输出的字面量 "\n" 转换为实际换行
-        # 2. s/-----BEGIN [A-Z ]*-----/&\n/g: 确保 Header 之后强制换行 (修复单行粘连)
-        # 3. s/-----END [A-Z ]*-----/\n&/g:   确保 Footer 之前强制换行 (修复单行粘连)
-        # 4. /^$/d:                           删除因重复换行产生的空行
+        # 使用管道处理 rbw 输出，解决格式问题：
+        # 1. 将字面量 "\n" 转换为实际换行 (处理某些客户端复制粘贴导致的格式错误)。
+        # 2. 确保 PEM Header/Footer 独占一行。
+        # 3. 删除空行。
         if nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw get "${item}" -f "${field}" \
            | sed -e 's/\\n/\n/g' \
                  -e 's/-----BEGIN [A-Z ]*-----/&\n/g' \
                  -e 's/-----END [A-Z ]*-----/\n&/g' \
            | sed '/^$/d' > "${out}"; then
            
+            # 检查文件是否为空
             if [[ ! -s "${out}" ]]; then
                 err "Error: File '${out}' is empty. Field '${field}' might be missing in Bitwarden item."
                 return 1
@@ -280,11 +327,12 @@ restore_ssh_keys() {
         fi
     }
 
-    # 检查 rbw 是否已认证
-    # 使用 nix shell 引入 pinentry-curses 以支持密码输入
+    # 检查 rbw 是否处于未锁定状态
+    # 引入 pinentry-curses 依赖，因为 rbw 需要它来提示输入主密码
     if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command rbw unlocked 2>/dev/null; then
         info "Please login to Bitwarden (rbw) to fetch the SSH key."
 
+        # 交互式登录 Bitwarden
         read -r -p "Enter Bitwarden server URL (Leave empty for official server): " bw_url
         if [[ -z "${bw_url}" ]]; then
             bw_url="https://api.bitwarden.com"
@@ -294,8 +342,7 @@ restore_ssh_keys() {
 
         read -r -p "Enter your Bitwarden email: " bw_email
         
-        # 进入带有 rbw 和 pinentry-curses 的子 shell 让用户交互式登录
-        # 并显式配置 pinentry 程序
+        # 执行登录命令链
         info "Configuring rbw..."
         if ! nix shell nixpkgs#rbw nixpkgs#pinentry-curses --command bash -c "rbw config set base_url ${bw_url} && rbw config set email ${bw_email} && rbw config set pinentry pinentry-curses && echo 'Please enter your master password to login:' && rbw login"; then
             err "Failed to login to Bitwarden. Please verify your credentials."
@@ -303,37 +350,37 @@ restore_ssh_keys() {
         fi
     fi
 
-    # 提示输入 Bitwarden 中的密钥项名称 (默认为主机名)
+    # 提示用户输入 Bitwarden 中的 Item 名称
+    # 默认为当前选中的主机名，允许用户回车确认或输入新名称覆盖
     read -r -p "Enter the Bitwarden item name for SSH key [default: ${SELECTED_HOST}]: " bw_item_name
     bw_item_name=${bw_item_name:-${SELECTED_HOST}}
 
-    # 获取密钥
-    # 同样需要 pinentry-curses 环境，以防 agent 超时需要重新认证
+    # 开始获取密钥
     info "Fetching key '${bw_item_name}'..."
 
     local fetch_success=true
 
-    # 获取私钥
+    # 获取私钥 (字段名: private_key)
     info "Fetching private key..."
     if ! _fetch_key_field "${bw_item_name}" "private_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key"; then
         fetch_success=false
     fi
 
-    # 获取公钥
+    # 获取公钥 (字段名: public_key)
     info "Fetching public key..."
     if ! _fetch_key_field "${bw_item_name}" "public_key" "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"; then
         fetch_success=false
     fi
 
     if [[ "$fetch_success" == "true" ]]; then
-        # 设置正确权限
+        # 设置密钥文件的正确权限 (私钥 600, 公钥 644)
         chmod 600 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
         chmod 644 "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
         success "SSH keys fetched successfully."
 
+        # 打印密钥预览 (首尾行) 供用户视觉确认
         info "--- Key Preview (Masked) ---"
         info "Private Key:"
-        # 打印首尾行以验证格式是否正确（例如检查是否已正确换行）
         head -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
         echo "......"
         tail -n 1 "${TEMP_KEY_DIR}/ssh_host_ed25519_key"
@@ -343,12 +390,12 @@ restore_ssh_keys() {
         cat "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub"
         info "----------------------------"
 
-        # 复制密钥到当前 ISO 环境，以便 sops-nix 在构建时可以解密 secrets
+        # 将密钥复制到当前 ISO 环境的 /etc/ssh
+        # 这一步对于下一步的 sops 解密验证至关重要
         info "Copying keys to current environment for sops-nix decryption..."
         mkdir -p /etc/ssh
         cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key" /etc/ssh/ssh_host_ed25519_key
         cp "${TEMP_KEY_DIR}/ssh_host_ed25519_key.pub" /etc/ssh/ssh_host_ed25519_key.pub
-        # 确保当前环境也有正确权限
         chmod 600 /etc/ssh/ssh_host_ed25519_key
     else
         err "Failed to fetch keys properly!"
@@ -357,10 +404,16 @@ restore_ssh_keys() {
     fi
 }
 
+#######################################
+# 验证 SOPS 解密功能。
+# 这是一个"防御性编程"步骤：
+# 使用刚刚恢复的 SSH 密钥，尝试解密仓库中的 secrets.yaml。
+# 如果解密失败，说明密钥不匹配，必须立即停止安装，否则系统安装后将无法解密用户密码，导致无法登录。
+#######################################
 verify_sops_decryption() {
     step "Verifying SOPS decryption..."
 
-    # 1. 确定私钥位置 (脚本中恢复到了 /etc/ssh/ssh_host_ed25519_key)
+    # 1. 定位私钥 (我们刚刚复制到了这里)
     local key_path="/etc/ssh/ssh_host_ed25519_key"
 
     if [[ ! -f "${key_path}" ]]; then
@@ -369,22 +422,13 @@ verify_sops_decryption() {
     fi
 
     # 2. 尝试解密 secrets.yaml
-    # SOPS 默认会根据环境变量或配置文件寻找密钥。
-    # 这里我们需要告诉 sops 使用 SSH key 转换成的 age key。
-    # sops-nix 的机制是把 ssh key 转换成 age key。
-    # 我们可以利用 sops 的 --keyservice 选项或者设置 SOPS_AGE_KEY_FILE 环境变量。
-    
-    # 但更简单的方法是直接利用 ssh-to-age 工具（如果环境里有）或者让 sops 自动识别 SSH 密钥。
-    # 实际上，sops 原生并不直接支持读取 ssh 私钥文件作为 age key（这是 sops-nix 做的一层桥接）。
-    # sops-nix 在激活时会运行一个脚本把 ssh key 转换成 age key 放在 /run/secrets.d/age-keys.txt (类似路径)。
-    
-    # 在安装脚本这种临时环境中，最直接的验证方法是：
-    # 使用 ssh-to-age 将 SSH 私钥转换为 Age 私钥，然后尝试解密。
+    # 由于 sops-nix 使用 ssh-to-age 转换后的 age 密钥来加密，
+    # 我们需要模拟这个过程：先将 SSH 私钥转换为 Age 私钥。
     
     info "Converting SSH key to Age key for testing..."
     
-    # 获取转换后的 Age 私钥
     local age_key
+    # 使用 nix shell 运行 ssh-to-age 工具
     if ! age_key=$(nix shell nixpkgs#ssh-to-age --command ssh-to-age -private-key -i "${key_path}"); then
         err "❌ Failed to convert SSH key to Age key."
         return 1
@@ -392,10 +436,10 @@ verify_sops_decryption() {
     
     info "Attempting to decrypt secrets.yaml..."
     
-    # 设置环境变量供 sops 使用
+    # 设置环境变量 SOPS_AGE_KEY，sops 工具会读取此变量作为解密密钥
     export SOPS_AGE_KEY="${age_key}"
     
-    # 尝试解密 (只输出到 /dev/null，不展示内容，只看退出码)
+    # 尝试解密，将输出重定向到 /dev/null，只关心退出状态码
     if nix shell nixpkgs#sops --command sops --decrypt "secrets/secrets.yaml" > /dev/null 2>&1; then
         success "✅ SOPS decryption verified successfully!"
         return 0
@@ -409,18 +453,21 @@ verify_sops_decryption() {
 
 #######################################
 # 步骤 5: 选择目标磁盘。
-# 列出物理磁盘并提示用户选择一个。
-# 检查现有的 Windows 分区以警告用户。
-# 设置全局 TARGET_DISK。
+# 1. 列出系统中的物理磁盘。
+# 2. 提示用户输入目标磁盘设备名。
+# 3. 检查是否存在 Windows 分区并警告。
+# 4. 请求用户最终确认擦除数据。
 #######################################
 select_disk() {
     step "[5/8] Select target disk"
+    # 列出所有块设备，过滤出 disk 类型
     lsblk -d -n -o NAME,SIZE,MODEL,TYPE | grep "disk"
     
     while true; do
         read -r -p "Please enter target disk name (e.g., sda or nvme0n1): " disk_name
         TARGET_DISK="/dev/${disk_name}"
 
+        # 检查设备块文件是否存在
         if [[ -b "${TARGET_DISK}" ]]; then
             break
         else
@@ -428,7 +475,7 @@ select_disk() {
         fi
     done
 
-    # 检查 Windows 分区 (NTFS)
+    # 检查是否存在 NTFS 分区 (可能的 Windows 系统)
     if lsblk "${TARGET_DISK}" -o FSTYPE | grep -q -i "ntfs"; then
         err "⚠️  POTENTIAL WINDOWS SYSTEM DETECTED ON ${TARGET_DISK}!"
         err "   Found NTFS partition(s). Installing NixOS will ERASE EVERYTHING including Windows."
@@ -444,47 +491,51 @@ select_disk() {
 
 #######################################
 # 步骤 6: 注入硬件配置。
-# 将 disko.nix 中的磁盘设备替换为选定的目标磁盘。
+# 修改 `hosts/<host>/disko.nix` 文件，将其中占位符设备路径替换为用户选择的实际磁盘。
 #######################################
 inject_hardware_config() {
     step "[6/8] Injecting hardware configuration..."
 
-    # 修改 Disko 配置
-    # 匹配 device = "..."; 并替换为实际目标磁盘
+    # 使用 sed 直接修改文件
+    # 匹配模式：device = "...";
+    # 替换为：device = "/dev/xxx";
     sed -i "s|device = \".*\";|device = \"${TARGET_DISK}\";|" "hosts/${SELECTED_HOST}/disko.nix"
     info "Installation target set to ${TARGET_DISK}"
 }
 
 #######################################
 # 步骤 7: 分区和格式化。
-# 在 'disko' 模式下运行 disko 以应用分区和格式化。
+# 运行 Disko 工具，根据 disko.nix 的声明式配置自动执行分区、格式化和挂载。
 #######################################
 partition_and_format() {
     step "[7/8] Executing Disko partitioning..."
-    # 使用 Flake 锁定的 Disko 版本 (确保环境一致性)
-    # --mode destroy,format,mount: 依次执行销毁旧数据、格式化新分区、挂载到 /mnt
-    # --yes-wipe-all-disks: 非交互式确认擦除所有数据 (脚本前面已通过 select_disk 确认过)
+    # 使用 nix run 运行当前 Flake 中的 disko 目标
+    # 参数说明：
+    # --mode destroy,format,mount: 依次执行销毁数据、格式化分区、挂载到 /mnt
+    # --yes-wipe-all-disks: 非交互式确认，因为我们在 select_disk 步骤已经确认过了
     nix run .#disko -- --mode destroy,format,mount --yes-wipe-all-disks "./hosts/${SELECTED_HOST}/disko.nix"
 }
 
 
 #######################################
 # 步骤 8: 安装 NixOS。
-# 生成 hardware-configuration.nix 并运行 nixos-install。
+# 1. 生成硬件配置 (hardware-configuration.nix)。
+# 2. 提交更改到 Git (Flake 要求)。
+# 3. 执行 nixos-install。
+# 4. 将配置和密钥持久化到新系统。
 #######################################
 install_nixos() {
     step "[8/8] Generating hardware config and installing..."
 
-    # 生成 hardware.nix
+    # 生成硬件扫描配置，排除文件系统相关内容 (因为由 Disko 管理)
     nixos-generate-config --root /mnt --no-filesystems --show-hardware-config > "hosts/${SELECTED_HOST}/hardware.nix"
     
     # 暂存所有修改 (包含新生成的 hardware.nix 和修改过的 disko.nix)
-    # 这一步对于基于 Git 的 Flake 至关重要，否则未追踪的文件可能被忽略
     git add .
 
-    # 提交修改，确保 Flake 能读取到新文件 (hardware.nix)
-    # 当 Flake 源为 Git 仓库时，未提交的文件(即使已暂存)可能无法被 Nix 识别，
-    # 导致 "No such file or directory" 错误。
+    # 提交修改到 Git
+    # Flake 的原理是只读取 Git 索引中的文件。如果文件未被追踪或未提交，
+    # 在基于 Git 的 Flake 源中构建时可能会报 "file not found" 错误。
     if [ -n "$(git status --porcelain)" ]; then
         info "Committing changes to Git to ensure Flake visibility..."
         git config user.name "NixOS Installer"
@@ -493,27 +544,28 @@ install_nixos() {
     fi
 
     info "Starting NixOS installation (${SELECTED_HOST})..."
-    # 使用当前目录 (.) 作为 Flake 源进行安装
-    # 这样可以避免在 /mnt 中处理 Git 仓库可能遇到的文件系统或权限问题
-    # 注意: substituters 已在 flake 配置中定义，此处无需重复指定
+    # 执行安装
+    # --no-root-passwd: 不要求设置 root 密码 (我们通过 sops 或 user 配置管理)
+    # --root /mnt: 安装目标目录
+    # --flake ".#${SELECTED_HOST}": 使用当前目录 (.) 作为 Flake 源，构建指定主机配置
     nixos-install --no-root-passwd --root /mnt --flake ".#${SELECTED_HOST}" --show-trace
 
-    # 安装完成后，将配置和密钥持久化到新系统
+    # --- 后处理：持久化配置 ---
     step "Persisting configuration and keys to /mnt..."
     
     # 1. 复制 NixOS 配置
-    # 最佳实践：将配置放在用户目录，并链接到 /etc/nixos
+    # 最佳实践：将配置放在用户目录 (~/.config/nixos)，而非 /etc/nixos，以避免 Git 权限问题
     
-    # 解析目标用户名 (从 modules/vars.nix)
+    # 尝试从 modules/vars.nix 中解析主要用户名
     local target_user
     target_user=$(grep 'username =' modules/vars.nix | cut -d'"' -f2)
     
-    # 默认回退 (防止解析失败)
+    # 如果解析失败，回退到交互式输入
     if [[ -z "${target_user}" ]]; then
         err "Warning: Could not detect username from modules/vars.nix"
         while true; do
             read -r -p "Please enter the primary username for the new system: " target_user
-            # 验证用户名格式 (仅允许小写字母、数字、短横线，且不能以数字或短横线开头)
+            # 用户名格式验证 (小写字母开头，仅含小写字母、数字、短横线)
             if [[ "${target_user}" =~ ^[a-z][a-z0-9-]*$ ]]; then
                 break
             else
@@ -522,33 +574,39 @@ install_nixos() {
         done
     fi
     
+    # 定义目标路径
     local target_home="/mnt/home/${target_user}"
     local target_config_dir="${target_home}/.config/nixos"
     
     info "Persisting configuration to ${target_config_dir}..."
     
-    # 确保目标用户主目录存在
+    # 创建目录结构
     mkdir -p "${target_home}"
     
-    # 清理旧配置 (如果存在)
+    # 清理可能存在的旧配置 (防止冲突)
     if [[ -d "${target_config_dir}" ]]; then
         rm -rf "${target_config_dir}"
     fi
     mkdir -p "${target_config_dir}"
     
-    # 复制当前目录所有内容（包含 .git，保留版本控制能力）
+    # 复制当前目录的所有文件到目标位置
     cp -r ./. "${target_config_dir}/"
     
-    # 设置权限 (由于用户仅存在于目标系统，直接使用 NixOS 默认首个用户的 UID/GID 1000:100)
+    # 设置所有权 (Ownership)
+    # 由于用户在宿主机环境中不存在 (只在 /mnt/etc/passwd 中)，我们直接使用 UID/GID 1000:100。
+    # NixOS 默认创建的第一个普通用户 UID 为 1000，用户组 users GID 为 100。
     info "Setting ownership to ${target_user} (UID 1000)..."
-    # 递归修改具体配置目录
+    
+    # 递归修改配置目录权限
     chown -R 1000:100 "${target_config_dir}"
-    # 修复父级 .config 目录权限 (如果是新建的，默认是 root 拥有，需修正以免用户无法写入其他配置)
+    
+    # 修正父级 .config 目录的权限 (避免 root 拥有导致用户无法写入其他配置)
     if [[ -d "${target_home}/.config" ]]; then
         chown 1000:100 "${target_home}/.config"
     fi
     
-    # 创建 /etc/nixos 软链接以符合习惯
+    # 创建传统的 /etc/nixos 软链接
+    # 这样 `nixos-rebuild switch` (不带参数) 仍然可以工作，且符合用户习惯
     if [[ -d "/mnt/etc/nixos" && ! -L "/mnt/etc/nixos" ]]; then
         rm -rf "/mnt/etc/nixos"
     fi
@@ -558,7 +616,8 @@ install_nixos() {
     info "Created symlink /etc/nixos -> ~/.config/nixos"
 
     # 2. 复制 SSH 密钥
-    # 确保新系统拥有身份密钥，以便在首次启动时解密 secrets (sops-nix)
+    # 将恢复的密钥持久化到新系统的 /etc/ssh
+    # 确保新系统启动时，sops-nix 能读取该密钥来解密 secrets (如用户密码)
     if [[ -n "${TEMP_KEY_DIR}" && -d "${TEMP_KEY_DIR}" ]]; then
         mkdir -p /mnt/etc/ssh
         cp "${TEMP_KEY_DIR}"/* /mnt/etc/ssh/
@@ -573,11 +632,11 @@ install_nixos() {
 }
 
 #######################################
-# 主执行入口点。
-# 编排安装步骤。
+# 主程序入口。
+# 按顺序编排所有安装步骤。
 #######################################
 main() {
-    # Set trap for cleanup on exit or interrupt
+    # 设置陷阱，在退出时执行清理
     trap cleanup EXIT INT TERM
     clear
     success "=== NixOS Multi-Host Installer ==="
@@ -595,5 +654,5 @@ main() {
     step "You can type 'reboot' to restart into the new system."
 }
 
-# Run main with all arguments
+# 运行主程序
 main "$@"

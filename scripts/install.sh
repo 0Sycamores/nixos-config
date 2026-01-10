@@ -303,8 +303,9 @@ restore_ssh_keys() {
         fi
     fi
 
-    # 提示输入 Bitwarden 中的密钥项名称
-    read -r -p "Enter the Bitwarden item name for ${SELECTED_HOST}'s SSH key: " bw_item_name
+    # 提示输入 Bitwarden 中的密钥项名称 (默认为主机名)
+    read -r -p "Enter the Bitwarden item name for SSH key [default: ${SELECTED_HOST}]: " bw_item_name
+    bw_item_name=${bw_item_name:-${SELECTED_HOST}}
 
     # 获取密钥
     # 同样需要 pinentry-curses 环境，以防 agent 超时需要重新认证
@@ -522,7 +523,7 @@ install_nixos() {
     fi
     
     local target_home="/mnt/home/${target_user}"
-    local target_config_dir="${target_home}/nixos-config"
+    local target_config_dir="${target_home}/.config/nixos"
     
     info "Persisting configuration to ${target_config_dir}..."
     
@@ -538,13 +539,13 @@ install_nixos() {
     # 复制当前目录所有内容（包含 .git，保留版本控制能力）
     cp -r ./. "${target_config_dir}/"
     
-    # 设置权限 (需要 chroot 因为用户仅存在于目标系统 /mnt/etc/passwd 中)
-    info "Setting ownership to ${target_user}..."
-    # 尝试使用 nixos-enter 在 chroot 环境中执行 chown
-    if ! nixos-enter --root /mnt -- -c "chown -R ${target_user}:users /home/${target_user}/nixos-config"; then
-         # 如果 nixos-enter 失败, 尝试直接使用常见 UID/GID 1000:100 (NixOS 第一个普通用户默认值)
-         info "nixos-enter failed, trying direct chown 1000:100..."
-         chown -R 1000:100 "${target_config_dir}"
+    # 设置权限 (由于用户仅存在于目标系统，直接使用 NixOS 默认首个用户的 UID/GID 1000:100)
+    info "Setting ownership to ${target_user} (UID 1000)..."
+    # 递归修改具体配置目录
+    chown -R 1000:100 "${target_config_dir}"
+    # 修复父级 .config 目录权限 (如果是新建的，默认是 root 拥有，需修正以免用户无法写入其他配置)
+    if [[ -d "${target_home}/.config" ]]; then
+        chown 1000:100 "${target_home}/.config"
     fi
     
     # 创建 /etc/nixos 软链接以符合习惯
@@ -553,8 +554,8 @@ install_nixos() {
     fi
     
     mkdir -p /mnt/etc
-    ln -sf "/home/${target_user}/nixos-config" "/mnt/etc/nixos"
-    info "Created symlink /etc/nixos -> ~/nixos-config"
+    ln -sf "/home/${target_user}/.config/nixos" "/mnt/etc/nixos"
+    info "Created symlink /etc/nixos -> ~/.config/nixos"
 
     # 2. 复制 SSH 密钥
     # 确保新系统拥有身份密钥，以便在首次启动时解密 secrets (sops-nix)

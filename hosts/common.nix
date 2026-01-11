@@ -44,6 +44,11 @@
   # Fish Shell 配置 (作为交互式 Shell)
   programs.fish = {
     enable = true;
+
+    interactiveShellInit = ''
+      set fish_greeting # 禁用默认的 "Welcome to fish..." 消息
+      fastfetch         # 启动时显示系统信息
+    '';
     
     # Fish 函数定义
     functions = {

@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
     owner = "adnksharp";    # GitHub 用户名/组织名
     repo = "CyberGRUB-2077";   # 仓库名
     rev = "${version}";   # Tag 或 Commit Hash
-    hash = "sha256-0axygrxkdlg2xr2ixxb3dwn5f9ka73gw00p3dxbnham9akwj036n";
+    hash = "sha256-1gwg+VSpKmhXb+MCwN84aiZXLG9j9R5F7uLRNnt+vis=";
   };
 
   installPhase = ''

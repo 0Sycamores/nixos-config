@@ -60,16 +60,16 @@
   # 自动登录到 TTY1
   services.getty.autologinUser = vars.username;
   # 登录后自动启动 Niri 这段脚本会在用户登录 shell 初始化时运行
-  environment.loginShellInit = ''
-    # 检查是否在 TTY1 (XDG_VTNR=1) 且没有其他图形界面运行
-    if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" -eq 1 ]; then
+  # environment.loginShellInit = ''
+  #   # 检查是否在 TTY1 (XDG_VTNR=1) 且没有其他图形界面运行
+  #   if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" -eq 1 ]; then
       
-      # 使用 exec 替换当前的 TTY shell 进程。
-      # 这样做的好处是：当你退出 Niri 时，会直接注销并回到登录提示符，
-      # 而不是退回到一个无用的 TTY shell 中。
-      exec niri-session
-    fi
-  '';
+  #     # 使用 exec 替换当前的 TTY shell 进程。
+  #     # 这样做的好处是：当你退出 Niri 时，会直接注销并回到登录提示符，
+  #     # 而不是退回到一个无用的 TTY shell 中。
+  #     exec niri-session
+  #   fi
+  # '';
 
   # VMware Guest Tools
   virtualisation.vmware.guest.enable = true;

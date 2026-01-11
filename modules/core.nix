@@ -1,18 +1,16 @@
 /*
   ===================================================================================
-  System Base Configuration
+  System Core Configuration
   ===================================================================================
-  此模块定义了所有主机共用的基础系统配置。
+  此模块定义了所有主机共用的基础系统配置 (Core Layer)。
+  它是“最小公约数”，不包含硬件特定或桌面环境配置。
   
   包含:
   1. Nix 自身配置 (Flakes, 镜像源)
-  2. 启动引导 (Bootloader - GRUB)
-  3. 内核参数与模块管理
-  4. 内存管理 (ZRAM)
-  5. 基础网络与时区
-  6. SSH 服务与安全
-  7. 用户账号管理
-  8. 核心系统软件包
+  2. 基础网络与时区
+  3. SSH 服务与安全
+  4. 用户账号管理
+  5. 核心系统软件包
 */
 { config, pkgs, vars, ... }:
 
@@ -35,48 +33,6 @@
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
     ];
   };
-
-  # =================================================================================
-  # Boot & Kernel
-  # =================================================================================
-
-  # 禁用 systemd-boot, 使用 GRUB
-  boot.loader.systemd-boot.enable = false;
-  
-  # 允许修改 EFI 变量
-  boot.loader.efi.canTouchEfiVariables = true;
-
-  # GRUB 引导加载程序配置
-  boot.loader.grub = {
-    enable = true;
-    efiSupport = true;
-    device = "nodev";      # EFI 系统不需要指定设备
-    useOSProber = true;    # 自动检测其他操作系统
-    default = "saved";     # 记住上次选择的启动项
-    # CyberGrub-2077 主题配置
-    theme = pkgs.cybergrub2077;
-  };
-
-  # 内核参数调优
-  boot.kernelParams = [
-    "nowatchdog"      # 禁用硬件看门狗
-    "zswap.enabled=0" # 禁用 ZSwap (使用 ZRam 代替)
-    "loglevel=5"      # 设置引导日志级别
-  ];
-
-  # 禁用不需要的内核模块
-  boot.blacklistedKernelModules = [
-    "iTCO_wdt"     # Intel Watchdog
-    "sp5100_tco"   # AMD/ATI Watchdog
-  ];
-
-  # =================================================================================
-  # Memory & Performance
-  # =================================================================================
-
-  # 启用 ZRam (内存压缩交换)
-  zramSwap.enable = true;
-  zramSwap.memoryPercent = 50; # 使用 50% 内存作为 ZRam
 
   # =================================================================================
   # Network & Time

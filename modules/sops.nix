@@ -17,7 +17,7 @@
 {
   sops = {
     # 默认 SOPS 文件路径 (相对于当前文件或使用绝对路径)
-    defaultSopsFile = ../secrets/secrets.yaml;
+    defaultSopsFile = ../.secrets.yaml;
     
     # 默认文件格式 (YAML, JSON, BINARY 等)
     defaultSopsFormat = "yaml";

@@ -21,8 +21,9 @@
     # 导入本地配置模块
     ./disko.nix                 # 本机磁盘分区配置
     ./hardware.nix              # 本机硬件配置
-    ../../modules/system-base.nix # 系统通用基础配置
-    ../../modules/sops-config.nix # SOPS 通用配置
+    ../../modules/core.nix        # 系统通用基础配置 (无引导)
+    ../../modules/boot.nix        # 物理机引导配置
+    ../../modules/sops.nix        # SOPS 通用配置
   ];
 
   # =================================================================================

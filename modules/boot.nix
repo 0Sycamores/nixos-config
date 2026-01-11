@@ -45,7 +45,8 @@
   boot.kernelParams = [
     "nowatchdog"      # 禁用硬件看门狗
     "zswap.enabled=0" # 禁用 ZSwap (使用 ZRam 代替)
-    "loglevel=5"      # 设置引导日志级别
+    "quiet"           # 静默启动
+    "loglevel=3"      # 设置引导日志级别
   ];
 
   # 禁用不需要的内核模块

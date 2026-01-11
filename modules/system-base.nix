@@ -53,7 +53,18 @@
     device = "nodev";      # EFI 系统不需要指定设备
     useOSProber = true;    # 自动检测其他操作系统
     default = "saved";     # 记住上次选择的启动项
-    theme = pkgs.distro-grub-themes.nixos;
+    # 使用 fetchFromGitHub 获取 NixOS 主题
+    theme = pkgs.stdenv.mkDerivation {
+      pname = "distro-grub-themes";
+      version = "3.1";
+      src = pkgs.fetchFromGitHub {
+        owner = "AdisonCavani";
+        repo = "distro-grub-themes";
+        rev = "v3.1";
+        hash = "sha256-ZcoGbbOMDDwjLhsvs77C7G7vINQnprdfI37a9ccrmPs=";
+      };
+      installPhase = "cp -r customize/nixos $out";
+    };
     # # CyberPunk 主题配置
     # theme = pkgs.fetchFromGitHub {
     #     owner = "adnksharp";
@@ -150,7 +161,6 @@
     wget
     curl
     git
-    distro-grub-themes
   ];
 
   # NixOS 版本状态 (请勿随意修改)

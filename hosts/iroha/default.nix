@@ -58,6 +58,9 @@
     packages = with pkgs; [ terminus_font ];
   };
 
+  # 自动登录到 TTY1
+  services.getty.autologinUser = vars.username;
+
   # VMware Guest Tools
   virtualisation.vmware.guest.enable = true;
 

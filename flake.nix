@@ -86,7 +86,10 @@
         modules = [
           ./hosts/iroha/default.nix
           {
-            nixpkgs.overlays = [ customPkgsOverlay ];
+            nixpkgs.overlays = [
+              customPkgsOverlay
+              inputs.niri.overlays.niri
+            ];
           }
         ];
       };

@@ -48,6 +48,40 @@
   # 设置主机名
   networking.hostName = "yukino";
 
+  # NVIDIA 显卡驱动配置
+  services.xserver.videoDrivers = [ "nvidia" ];
+
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+  };
+
+  hardware.nvidia = {
+    # 必须启用 modesetting。
+    modesetting.enable = true;
+
+    # Nvidia 电源管理。实验性功能，可能导致睡眠/挂起失败。
+    # 如果你在从睡眠唤醒后遇到图形损坏或应用程序崩溃的问题，请启用此选项。
+    # 这通过将整个 VRAM 内存保存到 /tmp/ 而不仅仅是基本部分来修复该问题。
+    powerManagement.enable = false;
+
+    # 细粒度电源管理。在不使用 GPU 时将其关闭。
+    # 实验性功能，仅适用于现代 Nvidia GPU（Turing 架构或更新版本）。
+    powerManagement.finegrained = false;
+
+    # 使用 Nvidia 开源内核模块（不要与独立的第三方 "nouveau" 开源驱动混淆）。
+    # 支持仅限于 Turing 及更高架构。支持的 GPU 完整列表见：
+    # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus
+    open = true;
+
+    # 启用 Nvidia 设置菜单，
+    # 可通过 `nvidia-settings` 访问。
+    nvidiaSettings = true;
+
+    # 可选：你可能需要为你的特定 GPU 选择合适的驱动版本。
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
+  };
+
   # 防火墙配置
   # OpenSSH (22) 默认会开启防火墙，但在此处显式声明以便管理
   networking.firewall.allowedTCPPorts = [ 22 ];

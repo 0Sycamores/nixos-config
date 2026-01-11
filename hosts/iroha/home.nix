@@ -17,6 +17,7 @@
   imports = [
     # 导入通用配置模块
     ../common.nix
+    # 注意：inputs.niri.homeModules.niri 会由系统级模块自动导入，此处无需重复
   ];
 
   home.packages = with pkgs; [

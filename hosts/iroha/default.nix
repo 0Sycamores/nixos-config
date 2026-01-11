@@ -49,6 +49,9 @@
   # 设置主机名
   networking.hostName = "iroha";
 
+  # VMware Guest Tools
+  virtualisation.vmware.guest.enable = true;
+
   # 防火墙配置
   # OpenSSH (22) 默认会打开防火墙，但在此处显式声明以便管理
   networking.firewall.allowedTCPPorts = [ 22 ];

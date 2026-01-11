@@ -16,6 +16,7 @@
   ];
 
   programs.niri.enable = true;
+  programs.niri.package = pkgs.niri-unstable;
 
   # PipeWire 音频 (Wayland 标配)
   security.rtkit.enable = true;

@@ -60,6 +60,12 @@
 
   # 自动登录到 TTY1
   services.getty.autologinUser = vars.username;
+  # TTY1 自动启动 niri
+  programs.fish.loginShellInit = ''
+    if test (tty) = "/dev/tty1"
+      exec niri-session
+    end
+  '';
 
   # VMware Guest Tools
   virtualisation.vmware.guest.enable = true;

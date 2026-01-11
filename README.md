@@ -5,3 +5,5 @@
 ```bash
 bash <(curl -fsSL nixos.sycamore.icu/install)
 ```
+
+## 常用命令

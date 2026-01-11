@@ -15,22 +15,37 @@
     inputs.niri.nixosModules.niri
   ];
 
-  programs.niri = {
+  programs.niri.enable = true;
+
+  # PipeWire 音频 (Wayland 标配)
+  security.rtkit.enable = true;
+  services.pipewire = {
     enable = true;
+    alsa.enable = true;
+    pulse.enable = true;
   };
+
+  # Polkit 认证服务 (解决 GUI 应用无法获取 root 权限的问题)
+  security.polkit.enable = true;
+
+  # 字体配置
+  fonts.packages = with pkgs; [
+    noto-fonts
+    noto-fonts-cjk-sans  # 思源黑体
+    noto-fonts-cjk-serif # 思源宋体
+    noto-fonts-color-emoji
+    nerd-fonts.jetbrains-mono # 代码和图标字体
+  ];
 
   # 基础 Wayland 环境依赖
   environment.systemPackages = with pkgs; [
     wl-clipboard   # 命令行剪贴板工具
     libnotify      # 通知发送工具 (notify-send)
     wayland-utils  # wayland-info 等工具
+  ];
 
-    
-    # Wayland 基础工具 (配合 Niri 使用)
-    # fuzzel      # 应用启动器
-    # waybar      # 状态栏
-    # dunst       # 通知守护进程
-    # alacritty   # 终端模拟器 (GPU 加速)
-    # polkit_gnome
+  home.packages = with pkgs; [
+    alacritty       # 终端 (GPU 加速，Wayland 兼容性极好)
+    firefox         # 浏览器
   ];
 }

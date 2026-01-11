@@ -9,15 +9,61 @@
   2. 可在此处添加仅针对 'iroha' 主机的用户级定制 (如特定软件包、Git 配置覆盖等)。
   
   当前状态:
-  仅导入通用配置，暂无特定修改。
+  已配置 Niri 桌面环境。
 */
-{ config, pkgs, ... }:
+{ config, pkgs, inputs, ... }:
 
 {
   imports = [
     # 导入通用配置模块
     ../common.nix
+    # Niri Home Manager 模块
+    inputs.niri.homeModules.niri
   ];
 
-  # 在此处添加 iroha 特有的配置...
+  programs.niri.settings = {
+    # === 启动项 ===
+    spawn-at-startup = [
+      { command = [ "fcitx5" "-d" ]; }
+    ];
+
+    # === 输入设置 ===
+    input = {
+      keyboard.xkb.layout = "us";
+      touchpad = {
+        tap = true;
+        dwt = true;
+      };
+    };
+
+    # === 快捷键绑定 (Binds) ===
+    binds = {
+      # 核心操作
+      "Mod+Shift+E".action.quit = [];
+      "Mod+Q".action.close-window = [];
+
+      # --- 关键应用 ---
+      "Mod+Return".action.spawn = "alacritty";
+      "Mod+D".action.spawn = "fuzzel";
+
+      # --- 窗口管理 ---
+      # Niri 是无限卷动平铺，左右移动列
+      "Mod+Left".action.focus-column-left = [];
+      "Mod+Right".action.focus-column-right = [];
+      "Mod+H".action.focus-column-left = [];
+      "Mod+L".action.focus-column-right = [];
+
+      # 移动窗口位置
+      "Mod+Shift+Left".action.move-column-left = [];
+      "Mod+Shift+Right".action.move-column-right = [];
+      
+      # 调整窗口大小
+      "Mod+R".action.switch-preset-column-width = [];
+      "Mod+F".action.maximize-column = [];
+      "Mod+Shift+F".action.fullscreen-window = [];
+
+      # 截图 (存到家目录)
+      "Print".action.screenshot = [];
+    };
+  };
 }

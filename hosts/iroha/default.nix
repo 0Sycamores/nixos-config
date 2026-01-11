@@ -23,8 +23,10 @@
     ./disko.nix                 # 本机磁盘分区配置
     ./hardware.nix              # 本机硬件配置 (通常由 nixos-generate-config 生成)
     ../../modules/core.nix        # 系统通用基础配置 (无引导)
+    ../../modules/mirror.nix      # 国内镜像源
     ../../modules/boot.nix        # 物理机引导配置
     ../../modules/sops.nix        # SOPS 通用配置
+    ../desktop.nix                # 桌面环境配置 (Niri)
   ];
 
   # =================================================================================

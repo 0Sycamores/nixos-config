@@ -42,12 +42,16 @@
     # SOPS-Nix (敏感信息加密管理)
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Niri (Wayland 窗口管理器)
+    niri.url = "github:sodiboo/niri-flake";
+    niri.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   # =================================================================================
   # Outputs (构建结果)
   # =================================================================================
-  outputs = { self, nixpkgs, home-manager, darwin, nixos-wsl, disko, sops-nix, ... }@inputs:
+  outputs = { self, nixpkgs, home-manager, darwin, nixos-wsl, disko, sops-nix, niri, ... }@inputs:
     let
       # 导入全局变量模块，供后续配置使用
       vars = import ./modules/vars.nix;

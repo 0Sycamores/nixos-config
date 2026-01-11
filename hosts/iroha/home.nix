@@ -5,7 +5,7 @@
   此文件定义了主机 'iroha' 特有的 Home Manager 配置。
   
   作用:
-  1. 导入通用 Home Manager 配置 (modules/home.nix)。
+  1. 导入通用 Home Manager 配置 (modules/home-common.nix)。
   2. 可在此处添加仅针对 'iroha' 主机的用户级定制 (如特定软件包、Git 配置覆盖等)。
   
   当前状态:
@@ -16,7 +16,7 @@
 {
   imports = [
     # 导入通用配置模块
-    ../../modules/home.nix
+    ../common.nix
   ];
 
   # 在此处添加 iroha 特有的配置...

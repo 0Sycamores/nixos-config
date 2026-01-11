@@ -22,18 +22,6 @@
   # 启用 Nix Command 和 Flakes 支持
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  # 配置国内镜像源以加速下载 (USTC, SJTU)
-  nix.settings = {
-    substituters = [
-      "https://mirrors.ustc.edu.cn/nix-channels/store"
-      "https://mirror.sjtu.edu.cn/nix-channels/store"
-      "https://cache.nixos.org/"
-    ];
-    trusted-public-keys = [
-      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-    ];
-  };
-
   # =================================================================================
   # Network & Time
   # =================================================================================
@@ -89,8 +77,7 @@
   # 必须在系统级启用 Fish，才能将其用作登录 Shell
   programs.fish.enable = true;
 
-  # 确保 /etc/nixos 指向用户的 Flake 配置目录
-  # L+ 表示如果链接不存在则创建，如果存在且指向不同则强制重建
+  # 确保 /etc/nixos 指向用户的 Flake 配置目录 L+ 表示如果链接不存在则创建，如果存在且指向不同则强制重建
   systemd.tmpfiles.rules = [
     "L+ /etc/nixos - - - - /home/${vars.username}/.config/nixos"
   ];

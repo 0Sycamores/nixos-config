@@ -24,12 +24,13 @@
     wl-clipboard   # 命令行剪贴板工具
     libnotify      # 通知发送工具 (notify-send)
     wayland-utils  # wayland-info 等工具
-  ];
 
-  # 推荐配置: 启用 Polkit 认证代理 (GUI 提权弹窗)
-  # Niri 本身不带 Polkit agent，需要配合如 polkit-gnome 或 polkit-kde 使用
-  # 这里暂时安装，具体自启动可以在 home manager 中配置
-  environment.systemPackages = with pkgs; [
-    polkit_gnome
+    
+    # Wayland 基础工具 (配合 Niri 使用)
+    # fuzzel      # 应用启动器
+    # waybar      # 状态栏
+    # dunst       # 通知守护进程
+    # alacritty   # 终端模拟器 (GPU 加速)
+    # polkit_gnome
   ];
 }

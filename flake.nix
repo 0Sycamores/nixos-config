@@ -70,7 +70,7 @@
 
           # 导入自定义包
           {
-            nixpkgs.overlays = [ customPkgsOverlay ]
+            nixpkgs.overlays = [ customPkgsOverlay ];
           };
         ];
       };

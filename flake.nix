@@ -51,6 +51,8 @@
     let
       # 导入全局变量模块，供后续配置使用
       vars = import ./modules/vars.nix;
+      # 导入自定义pkgs的 overlay
+      customPkgsOverlay = import ./pkgs/overlay.nix;
     in
     {
     
@@ -65,6 +67,11 @@
         modules = [
           # 导入主机特定配置
           ./hosts/yukino/default.nix
+
+          # 导入自定义包
+          {
+            nixpkgs.overlays = [ customPkgsOverlay ]
+          }
         ];
       };
       

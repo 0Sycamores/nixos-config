@@ -53,25 +53,8 @@
     device = "nodev";      # EFI 系统不需要指定设备
     useOSProber = true;    # 自动检测其他操作系统
     default = "saved";     # 记住上次选择的启动项
-    # 使用 fetchFromGitHub 获取 NixOS 主题
-    theme = pkgs.stdenv.mkDerivation {
-      pname = "distro-grub-themes";
-      version = "3.1";
-      src = pkgs.fetchFromGitHub {
-        owner = "AdisonCavani";
-        repo = "distro-grub-themes";
-        rev = "v3.1";
-        hash = "sha256-ZcoGbbOMDDwjLhsvs77C7G7vINQnprdfI37a9ccrmPs=";
-      };
-      installPhase = "cp -r customize/nixos $out";
-    };
-    # # CyberPunk 主题配置
-    # theme = pkgs.fetchFromGitHub {
-    #     owner = "adnksharp";
-    #     repo = "CyberGRUB-2077";
-    #     rev = "6a5736ef44e4ede9bb403d78eafe7271dd2928db";
-    #     sha256 = "sha256-1f61nkh6a2vwdaglzsbhj0pm5nrfq7qb1vx8g8wg19s1sbdaq8j7";
-    # };
+    # CyberGrub-2077 主题配置
+    theme = pkgs.cybergrub2077;
   };
 
   # 内核参数调优

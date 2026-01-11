@@ -81,6 +81,9 @@
         specialArgs = { inherit inputs vars; };
         modules = [
           ./hosts/iroha/default.nix
+          {
+            nixpkgs.overlays = [ customPkgsOverlay ];
+          }
         ];
       };
     };

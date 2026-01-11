@@ -1,24 +1,23 @@
-/*
-  ===================================================================================
-  Disko Partitioning Configuration for Host 'yukino'
-  ===================================================================================
-  此文件使用 Disko 工具定义磁盘分区布局。
-  
-  磁盘: /dev/nvme0n1 (NVMe 固态硬盘)
-  分区方案: GPT
-  
-  布局:
-  1. ESP (EFI System Partition): 1GB, FAT32, 挂载于 /boot
-  2. Root (根分区): 剩余空间, Btrfs
-  
-  Btrfs 子卷策略:
-  - @ (root): 根目录 /
-  - @home: 用户家目录 /home
-  - @nix: Nix store /nix (独立管理)
-  - @log: 日志目录 /var/log (持久化日志)
-  - @snapshots: 快照目录
-  - @downloads/videos/games: 媒体/游戏目录，禁用 COW (Copy-on-Write) 以提升性能
-*/
+# ===================================================================================
+# Disko Partitioning Configuration for Host 'yukino'
+# ===================================================================================
+# 此文件使用 Disko 工具定义磁盘分区布局。
+#
+# 磁盘: /dev/nvme0n1 (NVMe 固态硬盘)
+# 分区方案: GPT
+#
+# 布局:
+# 1. ESP (EFI System Partition): 1GB, FAT32, 挂载于 /boot
+# 2. Root (根分区): 剩余空间, Btrfs
+#
+# Btrfs 子卷策略:
+# - @ (root): 根目录 /
+# - @home: 用户家目录 /home
+# - @nix: Nix store /nix (独立管理)
+# - @log: 日志目录 /var/log (持久化日志)
+# - @snapshots: 快照目录
+# - @downloads/videos/games: 媒体/游戏目录，禁用 COW (Copy-on-Write) 以提升性能
+# ===================================================================================
 { vars ? import ../../modules/vars.nix, ... }:
 
 {

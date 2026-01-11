@@ -1,24 +1,23 @@
-/*
-  ===================================================================================
-  Disko Partitioning Configuration for Host 'iroha'
-  ===================================================================================
-  此文件使用 Disko 工具定义磁盘分区布局。
-  
-  磁盘: /dev/sda (虚拟机或物理硬盘)
-  分区方案: GPT
-  
-  布局:
-  1. ESP (EFI System Partition): 1GB, FAT32, 挂载于 /boot
-  2. Root (根分区): 剩余空间, Btrfs
-  
-  Btrfs 子卷策略:
-  - @ (root): 根目录 /
-  - @home: 用户家目录 /home
-  - @nix: Nix store /nix (避免系统回滚时重新下载包)
-  - @log: 日志目录 /var/log (避免回滚丢失日志)
-  - @snapshots: Btrfs 快照存放点
-  - @downloads/videos/games: 媒体/游戏目录，禁用 COW (Copy-on-Write) 以提升性能
-*/
+# ===================================================================================
+# Disko Partitioning Configuration for Host 'iroha'
+# ===================================================================================
+# 此文件使用 Disko 工具定义磁盘分区布局。
+#
+# 磁盘: /dev/sda (虚拟机或物理硬盘)
+# 分区方案: GPT
+#
+# 布局:
+# 1. ESP (EFI System Partition): 1GB, FAT32, 挂载于 /boot
+# 2. Root (根分区): 剩余空间, Btrfs
+#
+# Btrfs 子卷策略:
+# - @ (root): 根目录 /
+# - @home: 用户家目录 /home
+# - @nix: Nix store /nix (避免系统回滚时重新下载包)
+# - @log: 日志目录 /var/log (避免回滚丢失日志)
+# - @snapshots: Btrfs 快照存放点
+# - @downloads/videos/games: 媒体/游戏目录，禁用 COW (Copy-on-Write) 以提升性能
+# ===================================================================================
 { vars ? import ../../modules/vars.nix, ... }:
 
 {

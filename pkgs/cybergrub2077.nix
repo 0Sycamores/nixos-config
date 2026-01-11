@@ -1,3 +1,13 @@
+# ===================================================================================
+# CyberGRUB 2077 Theme Package
+# ===================================================================================
+# 这是一个自定义的 Nix 软件包，用于安装和配置 CyberGRUB 2077 主题。
+#
+# 功能:
+# 1. 从 GitHub 下载 CyberGRUB-2077 仓库。
+# 2. 安装 GRUB 主题文件。
+# 3. 允许用户选择特定的 Logo (默认: samurai)。
+# ===================================================================================
 { lib, stdenv, fetchFromGitHub, logoName ? "samurai" }:
 
 stdenv.mkDerivation rec {
@@ -5,9 +15,9 @@ stdenv.mkDerivation rec {
   version = "2.0.1";
 
   src = fetchFromGitHub {
-    owner = "adnksharp";    # GitHub 用户名/组织名
-    repo = "CyberGRUB-2077";   # 仓库名
-    rev = "${version}";   # Tag 或 Commit Hash
+    owner = "adnksharp";     # GitHub 用户名/组织名
+    repo = "CyberGRUB-2077"; # 仓库名
+    rev = "${version}";      # Tag 或 Commit Hash
     hash = "sha256-1gwg+VSpKmhXb+MCwN84aiZXLG9j9R5F7uLRNnt+vis=";
   };
 

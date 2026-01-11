@@ -1,18 +1,17 @@
-/*
-  ===================================================================================
-  NixOS Configuration Flake
-  ===================================================================================
-  这是整个 NixOS 配置的入口点 (Flake)。
-  
-  作用:
-  1. 定义输入源 (Inputs): 指定 Nixpkgs、Home Manager 等依赖的版本。
-  2. 定义输出 (Outputs): 构建 NixOS 系统配置、软件包等。
-  3. 统一管理多主机配置 (yukino, iroha)。
-  
-  使用方法:
-  - 部署 yukino: sudo nixos-rebuild switch --flake .#yukino
-  - 部署 iroha: sudo nixos-rebuild switch --flake .#iroha
-*/
+# ===================================================================================
+# NixOS Configuration Flake
+# ===================================================================================
+# 这是整个 NixOS 配置的入口点 (Flake)。
+#
+# 作用:
+# 1. 定义输入源 (Inputs): 指定 Nixpkgs、Home Manager 等依赖的版本。
+# 2. 定义输出 (Outputs): 构建 NixOS 系统配置、软件包等。
+# 3. 统一管理多主机配置 (yukino, iroha)。
+#
+# 使用方法:
+# - 部署 yukino: sudo nixos-rebuild switch --flake .#yukino
+# - 部署 iroha: sudo nixos-rebuild switch --flake .#iroha
+# ===================================================================================
 {
   description = "Sycamore's Multi-System Nix Config";
 

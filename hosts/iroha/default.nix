@@ -37,7 +37,7 @@
     extraSpecialArgs = { inherit inputs vars; }; # 传递 inputs 和 vars 到 Home Manager 模块
     
     # 导入 iroha 用户的 Home Manager 配置
-    users.${vars.username} = import ../../home/iroha.nix;
+    users.${vars.username} = import ./home.nix;
   };
 
   # =================================================================================

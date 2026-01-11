@@ -1,8 +1,9 @@
 /*
   ===================================================================================
-  Home Manager Common Configuration
+  Home Manager Core Configuration
   ===================================================================================
-  此文件定义了所有用户的通用 Home Manager 配置。
+  此文件定义了所有用户的通用 Home Manager 配置 (Core Layer)。
+  它是“最小公约数”，包含所有环境(Server, Desktop, WSL)都需要的工具。
   
   包含:
   1. 基础用户目录和 Shell 配置 (Bash/Fish)
@@ -13,7 +14,7 @@
   6. Home Manager 自身状态管理
   
   使用方法:
-  被具体用户的 home.nix 导入 (e.g. home/yukino.nix).
+  被具体主机的 home.nix 导入 (e.g. hosts/iroha/home.nix).
 */
 { config, pkgs, vars, osConfig, ... }:
 

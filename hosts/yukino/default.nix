@@ -36,7 +36,7 @@
     extraSpecialArgs = { inherit inputs vars; }; # 传递 inputs 和 vars
     
     # 导入 yukino 用户的 Home Manager 配置
-    users.${vars.username} = import ../../home/yukino.nix;
+    users.${vars.username} = import ./home.nix;
   };
 
   # =================================================================================

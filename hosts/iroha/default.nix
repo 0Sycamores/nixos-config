@@ -49,6 +49,15 @@
   # 设置主机名
   networking.hostName = "iroha";
 
+  # =================================================================================
+  # Console Settings
+  # =================================================================================
+  console = {
+    earlySetup = true;
+    font = "ter-v16n"; # 使用 16px 标准字体，或者直接留空使用默认
+    packages = with pkgs; [ terminus_font ];
+  };
+
   # VMware Guest Tools
   virtualisation.vmware.guest.enable = true;
 

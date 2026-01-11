@@ -82,17 +82,6 @@
     "L+ /etc/nixos - - - - /home/${vars.username}/.config/nixos"
   ];
 
-  # =================================================================================
-  # Console Settings
-  # =================================================================================
-  
-  console = {
-    earlySetup = true; # 尽早启用字体设置
-    font = "ter-v32n"; # 使用较大的 Terminus 字体 (32px，适合高分屏)
-    packages = with pkgs; [ terminus_font ];
-    useXkbConfig = true; # 使用 X11 的键盘布局配置
-  };
-
   # 系统级基础软件包
   environment.systemPackages = with pkgs; [
     wget

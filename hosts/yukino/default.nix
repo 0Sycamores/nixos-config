@@ -48,6 +48,16 @@
   # 设置主机名
   networking.hostName = "yukino";
 
+  # =================================================================================
+  # Console Settings
+  # =================================================================================
+  
+  console = {
+    earlySetup = true; # 尽早启用字体设置
+    font = "ter-v32n"; # 使用较大的 Terminus 字体 (32px，适合高分屏)
+    packages = with pkgs; [ terminus_font ];
+  };
+
   # NVIDIA 显卡驱动配置
   services.xserver.videoDrivers = [ "nvidia" ];
 

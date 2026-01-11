@@ -17,8 +17,6 @@
   imports = [
     # 导入通用配置模块
     ../common.nix
-    # Niri Home Manager 模块
-    inputs.niri.homeModules.niri
   ];
 
   home.packages = with pkgs; [

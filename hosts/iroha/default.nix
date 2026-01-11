@@ -54,7 +54,7 @@
   # =================================================================================
   console = {
     earlySetup = true;
-    font = "ter-v16n"; # 使用 16px 标准字体，或者直接留空使用默认
+    font = "ter-v24n"; # 使用 16px 标准字体，或者直接留空使用默认
     packages = with pkgs; [ terminus_font ];
   };
 
@@ -65,7 +65,7 @@
   virtualisation.vmware.guest.enable = true;
 
   # 强制指定一个高分辨率，例如 1920x1080 或 2560x1440 "Virtual-1" 是显示器名称
-  boot.kernelParams = [ "video=Virtual-1:1920x1080" ];
+  boot.kernelParams = [ "video=Virtual-1:1080x1080" ];
 
   # 防火墙配置
   # OpenSSH (22) 默认会打开防火墙，但在此处显式声明以便管理

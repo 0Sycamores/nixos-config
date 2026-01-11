@@ -59,17 +59,33 @@
 
   # 自动登录到 TTY1
   services.getty.autologinUser = vars.username;
-  # 登录后自动启动 Niri 这段脚本会在用户登录 shell 初始化时运行
+  #   # 登录后自动启动 Niri
   # environment.loginShellInit = ''
-  #   # 检查是否在 TTY1 (XDG_VTNR=1) 且没有其他图形界面运行
+  #   # 检查是否在 TTY1 且没有图形界面
   #   if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" -eq 1 ]; then
       
-  #     # 使用 exec 替换当前的 TTY shell 进程。
-  #     # 这样做的好处是：当你退出 Niri 时，会直接注销并回到登录提示符，
-  #     # 而不是退回到一个无用的 TTY shell 中。
-  #     exec niri-session
+  #     # 1. 添加 2-3 秒延时，等待内核释放 TTY 控制权及显卡就绪
+  #     sleep 2
+
+  #     # 2. 使用 exec 启动，并将日志重定向到家目录以便排错
+  #     exec niri-session &> $HOME/niri.log
   #   fi
   # '';
+  environment.loginShellInit = ''
+    # 检查 TTY1 且没有图形环境
+    if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" -eq 1 ]; then
+      
+      # 1. 打印一条消息，确认脚本正在运行
+      echo "Starting Niri from loginShellInit..."
+
+      # 2. 关键修改：使用 dbus-run-session 包裹
+      # 并在前面加上 systemd-cat 将日志发送到 journal (或者重定向到文件)
+      # 这样如果不成功，你可以在 TTY2 通过 journalctl -t niri-start 查看报错
+      
+      exec dbus-run-session niri-session &> /tmp/niri-start.log
+    fi
+  '';
+
 
   # VMware Guest Tools
   virtualisation.vmware.guest.enable = true;

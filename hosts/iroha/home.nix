@@ -21,6 +21,12 @@
     inputs.niri.homeModules.niri
   ];
 
+  home.packages = with pkgs; [
+    alacritty       # 终端
+    firefox         # 浏览器
+    fuzzel          # 启动菜单
+  ];
+
   programs.niri.settings = {
     # === 启动项 ===
     spawn-at-startup = [

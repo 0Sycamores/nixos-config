@@ -43,9 +43,4 @@
     libnotify      # 通知发送工具 (notify-send)
     wayland-utils  # wayland-info 等工具
   ];
-
-  home.packages = with pkgs; [
-    alacritty       # 终端 (GPU 加速，Wayland 兼容性极好)
-    firefox         # 浏览器
-  ];
 }

@@ -46,6 +46,7 @@
     enable = true;
 
     interactiveShellInit = ''
+      clear
       set fish_greeting # 禁用默认的 "Welcome to fish..." 消息
       fastfetch         # 启动时显示系统信息
     '';

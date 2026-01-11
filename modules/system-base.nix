@@ -150,6 +150,7 @@
     wget
     curl
     git
+    distro-grub-themes
   ];
 
   # NixOS 版本状态 (请勿随意修改)
